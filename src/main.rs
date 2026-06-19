@@ -1,5 +1,12 @@
-use anyhow::Result;
-use tokio::net::{TcpListener, TcpStream};
+use std::time::Duration;
+
+use anyhow::{Result, anyhow};
+use scrap::{Capturer, Display};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    spawn, sync,
+    task::spawn_blocking,
+};
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use vnc_server::protocol::{
@@ -11,7 +18,10 @@ use vnc_server::protocol::{
         version::Version,
     },
     pixel_format::PixelFormat,
+    server_msg::{ServerMessage, UpdateRect},
 };
+
+pub type Frame = Vec<u8>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,16 +32,56 @@ async fn main() -> Result<()> {
 
     info!("Application started");
 
+    let (width, height) = {
+        let display = match Display::primary() {
+            Ok(d) => d,
+            Err(err) => return Err(anyhow!("Can't get Display : {err}")),
+        };
+        (display.width(), display.height())
+    };
+
+    let (send_screen_frame, receive_screen_frame) = sync::watch::channel(Frame::default());
+    spawn_blocking(|| capture(send_screen_frame));
+    debug!("Display Capture started");
+
     let listener = TcpListener::bind("127.0.0.1:5900").await?;
 
     while let Ok((stream, _addr)) = listener.accept().await {
-        handle_connexion(stream).await?;
+        spawn(handle_connexion(
+            stream,
+            width as u16,
+            height as u16,
+            receive_screen_frame.clone(),
+        ));
     }
 
     Ok(())
 }
 
-async fn handle_connexion(mut stream: TcpStream) -> Result<()> {
+fn capture(send_screen_frame: sync::watch::Sender<Frame>) -> Result<()> {
+    let display = match Display::primary() {
+        Ok(d) => d,
+        Err(err) => return Err(anyhow!("Can't get Display : {err}")),
+    };
+
+    let time_between_frame = Duration::from_millis(100);
+    let mut recorder = Capturer::new(display)?;
+
+    loop {
+        if send_screen_frame.receiver_count() > 0 {
+            let frame = recorder.frame()?;
+            send_screen_frame.send_replace(frame.to_vec());
+        }
+        std::thread::sleep(time_between_frame);
+    }
+}
+
+async fn handle_connexion(
+    mut stream: TcpStream,
+    width: u16,
+    height: u16,
+    receive_screen_frame: sync::watch::Receiver<Frame>,
+) -> Result<()> {
     Version::default().send(&mut stream).await?;
     let requested_version = Version::recv(&mut stream).await?;
     debug!("Requested version is {requested_version:?}");
@@ -48,8 +98,8 @@ async fn handle_connexion(mut stream: TcpStream) -> Result<()> {
     debug!("{client_init:?}");
 
     ServerInit {
-        fb_width: 640,
-        fb_height: 480,
+        fb_width: width,
+        fb_height: height,
         pixel_format: PixelFormat::default(),
         name: String::from("Test server"),
     }
@@ -69,6 +119,23 @@ async fn handle_connexion(mut stream: TcpStream) -> Result<()> {
                 rect,
             } => {
                 debug!("Client asks for {rect:?}");
+                let data = receive_screen_frame.borrow().clone();
+                let stride = data.len() / height as usize;
+                let mut result = vec![];
+                for y in rect.y_pos..rect.height {
+                    for x in rect.x_pos..rect.width {
+                        let i = stride * y as usize + 4 * x as usize;
+                        result.extend_from_slice(&data[i..i + 4]);
+                    }
+                }
+
+                ServerMessage::FramebufferUpdate(vec![UpdateRect {
+                    rect,
+                    encoding_type: 0,
+                    data,
+                }])
+                .send(&mut stream)
+                .await?;
             }
             ClientMessage::KeyEvent { pressed, key } => {
                 debug!("Client send key {pressed:?}, {key:?}");

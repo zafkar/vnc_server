@@ -6,10 +6,10 @@ pub type EncodingType = i32;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rect {
-    x_pos: u16,
-    y_pos: u16,
-    width: u16,
-    height: u16,
+    pub x_pos: u16,
+    pub y_pos: u16,
+    pub width: u16,
+    pub height: u16,
 }
 
 impl RecvFrom for Rect {
@@ -41,8 +41,8 @@ impl SendInto for Rect {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pos {
-    x_pos: u16,
-    y_pos: u16,
+    pub x_pos: u16,
+    pub y_pos: u16,
 }
 
 impl RecvFrom for Pos {

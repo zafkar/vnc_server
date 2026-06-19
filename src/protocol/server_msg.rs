@@ -64,14 +64,16 @@ impl SendInto for ServerMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpdateRect {
-    rect: Rect,
-    encoding_type: EncodingType,
+    pub rect: Rect,
+    pub encoding_type: EncodingType,
+    pub data: Vec<u8>,
 }
 
 impl SendInto for UpdateRect {
     async fn send<S: tokio::io::AsyncWrite + Unpin>(&self, mut stream: S) -> anyhow::Result<()> {
         self.rect.send(&mut stream).await?;
         stream.write_i32(self.encoding_type).await?;
+        stream.write_all(&self.data).await?;
 
         Ok(())
     }
