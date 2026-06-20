@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
-use vnc_server::server::start_server;
+use vnc_server::server::VNCServer;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -9,5 +9,5 @@ async fn main() -> Result<()> {
         .with(fmt::layer())
         .init();
 
-    start_server().await
+    VNCServer::default().start().await
 }
