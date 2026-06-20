@@ -43,9 +43,9 @@ impl SendInto for PixelFormat {
         stream.write_u16(self.red_max).await?;
         stream.write_u16(self.green_max).await?;
         stream.write_u16(self.blue_max).await?;
-        stream.write_u8(self.red_shift.into()).await?;
-        stream.write_u8(self.green_shift.into()).await?;
-        stream.write_u8(self.blue_shift.into()).await?;
+        stream.write_u8(self.red_shift).await?;
+        stream.write_u8(self.green_shift).await?;
+        stream.write_u8(self.blue_shift).await?;
         stream.write_all(&[0u8; 3]).await?;
 
         Ok(())

@@ -79,15 +79,13 @@ impl From<u8> for MouseButtonMask {
 
 impl MouseButtonMask {
     pub fn into_enigo(&self) -> Vec<(enigo::Button, enigo::Direction)> {
-        let mut result = vec![];
-
-        result.push((enigo::Button::Left, bit_to_dir(self.0, 0)));
-        result.push((enigo::Button::Middle, bit_to_dir(self.0, 1)));
-        result.push((enigo::Button::Right, bit_to_dir(self.0, 2)));
-        result.push((enigo::Button::ScrollUp, bit_to_dir(self.0, 3)));
-        result.push((enigo::Button::ScrollDown, bit_to_dir(self.0, 4)));
-
-        result
+        vec![
+            (enigo::Button::Left, bit_to_dir(self.0, 0)),
+            (enigo::Button::Middle, bit_to_dir(self.0, 1)),
+            (enigo::Button::Right, bit_to_dir(self.0, 2)),
+            (enigo::Button::ScrollUp, bit_to_dir(self.0, 3)),
+            (enigo::Button::ScrollDown, bit_to_dir(self.0, 4)),
+        ]
     }
 }
 
