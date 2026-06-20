@@ -5,7 +5,7 @@ use crate::protocol::{RecvFrom, SendInto};
 
 pub type EncodingType = i32;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Rect {
     pub x_pos: u16,
     pub y_pos: u16,

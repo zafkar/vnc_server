@@ -10,7 +10,7 @@ use crate::{
             version::Version,
         },
         pixel_format::PixelFormat,
-        primitives::Pos,
+        primitives::{Flag, Pos},
         server_msg::{ServerMessage, UpdateRect},
     },
 };
@@ -69,23 +69,21 @@ impl ClientConnexion {
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
-                    let data = self.receive_screen_frame.borrow().clone();
-                    let stride = data.len() / self.height as usize;
-                    let mut result = vec![];
-                    for y in rect.y_pos..rect.height {
-                        for x in rect.x_pos..rect.width {
-                            let i = stride * y as usize + 4 * x as usize;
-                            result.extend_from_slice(&data[i..i + 4]);
-                        }
+                    if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
+                        let data = self.receive_screen_frame.borrow().clone();
+                        self.receive_screen_frame.mark_unchanged();
+                        ServerMessage::FramebufferUpdate(vec![UpdateRect {
+                            rect,
+                            encoding_type: 0,
+                            data: data.get_src_rect(rect, self.height as usize),
+                        }])
+                        .send(&mut stream)
+                        .await?;
+                    } else {
+                        ServerMessage::FramebufferUpdate(vec![])
+                            .send(&mut stream)
+                            .await?;
                     }
-
-                    ServerMessage::FramebufferUpdate(vec![UpdateRect {
-                        rect,
-                        encoding_type: 0,
-                        data,
-                    }])
-                    .send(&mut stream)
-                    .await?;
                 }
                 ClientMessage::KeyEvent { pressed, key } => {
                     debug!("Client send key {pressed:?}, {key:?}");
