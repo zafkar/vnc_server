@@ -12,7 +12,7 @@ use tokio::{
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use vnc_server::{
-    keyborad::xkeysym_into_enigo,
+    input_controller::{KeyEvent, enigo_controller_start},
     protocol::{
         RecvFrom, SendInto,
         client_msg::{ClientMessage, MouseButtonMask},
@@ -28,7 +28,6 @@ use vnc_server::{
 };
 
 pub type Frame = Vec<u8>;
-pub type KeyEvent = (Flag, xkeysym::Keysym);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,7 +54,7 @@ async fn main() -> Result<()> {
     let (mouse_buttons_sender, mouse_buttons_receiver) = sync::mpsc::channel(128);
     let (keyboard_sender, keyboard_receiver) = sync::mpsc::channel(128);
     spawn(async {
-        match enigo_controller(
+        match enigo_controller_start(
             mouse_pos_receiver,
             mouse_buttons_receiver,
             keyboard_receiver,
@@ -110,34 +109,6 @@ fn capture(send_screen_frame: sync::watch::Sender<Frame>) -> Result<()> {
             send_screen_frame.send_replace(frame.to_vec());
         }
         std::thread::sleep(time_between_frame);
-    }
-}
-
-async fn enigo_controller(
-    mut mouse_pos: sync::watch::Receiver<Pos>,
-    mut mouse_buttons_receiver: sync::mpsc::Receiver<MouseButtonMask>,
-    mut keyboard_receiver: sync::mpsc::Receiver<KeyEvent>,
-) -> Result<()> {
-    let minimal_time_between_pos_update = Duration::from_millis(25);
-
-    let mut enigo = enigo::Enigo::new(&enigo::Settings::default())?;
-
-    loop {
-        select! {
-            _ =  mouse_pos.changed() => {
-                let Pos { x_pos, y_pos } = mouse_pos.borrow().clone();
-                enigo.move_mouse(x_pos as i32, y_pos as i32, enigo::Coordinate::Abs)?;
-                sleep(minimal_time_between_pos_update).await;
-            }
-            Some(mask) = mouse_buttons_receiver.recv() => {
-                for (button, direction) in mask.into_enigo() {
-                    enigo.button(button, direction)?;
-                }
-            }
-            Some((flag, key)) = keyboard_receiver.recv() => {
-                enigo.key(xkeysym_into_enigo(key), flag.into())?;
-            }
-        }
     }
 }
 

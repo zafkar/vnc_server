@@ -1,2 +1,2 @@
-pub mod keyborad;
+pub mod input_controller;
 pub mod protocol;
