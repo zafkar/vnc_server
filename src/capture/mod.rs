@@ -11,12 +11,19 @@ pub type Frame = frame::Frame;
 
 pub struct Capturer {
     send_screen_frame: sync::watch::Sender<Frame>,
+    time_between_frame: Duration,
 }
 
 impl Capturer {
-    pub fn new() -> (Self, sync::watch::Receiver<Frame>) {
+    pub fn new(time_between_frame: Duration) -> (Self, sync::watch::Receiver<Frame>) {
         let (send_screen_frame, receive_screen_frame) = sync::watch::channel(Frame::default());
-        (Self { send_screen_frame }, receive_screen_frame)
+        (
+            Self {
+                send_screen_frame,
+                time_between_frame,
+            },
+            receive_screen_frame,
+        )
     }
     pub fn start(&mut self) -> Result<()> {
         let display = match Display::primary() {
@@ -24,7 +31,6 @@ impl Capturer {
             Err(err) => return Err(anyhow!("Can't get Display : {err}")),
         };
 
-        let time_between_frame = Duration::from_millis(100);
         let mut recorder = scrap::Capturer::new(display)?;
 
         let mut prev_data_hash = 0;
@@ -38,7 +44,7 @@ impl Capturer {
                     prev_data_hash = data_hash
                 }
             }
-            std::thread::sleep(time_between_frame);
+            std::thread::sleep(self.time_between_frame);
         }
     }
 

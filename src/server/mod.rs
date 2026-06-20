@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
     capture::Capturer,
     input_controller::{Controller, ControllerChannels},
@@ -13,6 +15,7 @@ mod client_connexion;
 pub struct VNCServer {
     pub bind_address: String,
     pub channel_size: usize,
+    pub time_between_frame: Duration,
 }
 
 impl Default for VNCServer {
@@ -20,6 +23,7 @@ impl Default for VNCServer {
         Self {
             bind_address: "0.0.0.0:5900".to_string(),
             channel_size: 128,
+            time_between_frame: Duration::from_millis(15),
         }
     }
 }
@@ -30,7 +34,7 @@ impl VNCServer {
 
         let (width, height) = Capturer::get_screen_size()?;
 
-        let (mut capturer, receive_screen_frame) = Capturer::new();
+        let (mut capturer, receive_screen_frame) = Capturer::new(self.time_between_frame);
         spawn_blocking(move || capturer.start());
         debug!("Display Capture started");
 
