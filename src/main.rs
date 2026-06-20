@@ -1,27 +1,34 @@
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
+use enigo::{Keyboard, Mouse};
 use scrap::{Capturer, Display};
 use tokio::{
     net::{TcpListener, TcpStream},
-    spawn, sync,
+    select, spawn, sync,
     task::spawn_blocking,
+    time::sleep,
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
-use vnc_server::protocol::{
-    RecvFrom, SendInto,
-    client_msg::ClientMessage,
-    handshake::{
-        init::{ClientInit, ServerInit},
-        security::{SecurityResult, SecurityType},
-        version::Version,
+use vnc_server::{
+    keyborad::xkeysym_into_enigo,
+    protocol::{
+        RecvFrom, SendInto,
+        client_msg::{ClientMessage, MouseButtonMask},
+        handshake::{
+            init::{ClientInit, ServerInit},
+            security::{SecurityResult, SecurityType},
+            version::Version,
+        },
+        pixel_format::PixelFormat,
+        primitives::{Flag, Pos},
+        server_msg::{ServerMessage, UpdateRect},
     },
-    pixel_format::PixelFormat,
-    server_msg::{ServerMessage, UpdateRect},
 };
 
 pub type Frame = Vec<u8>;
+pub type KeyEvent = (Flag, xkeysym::Keysym);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -44,15 +51,45 @@ async fn main() -> Result<()> {
     spawn_blocking(|| capture(send_screen_frame));
     debug!("Display Capture started");
 
+    let (mouse_pos_sender, mouse_pos_receiver) = sync::watch::channel(Pos::default());
+    let (mouse_buttons_sender, mouse_buttons_receiver) = sync::mpsc::channel(128);
+    let (keyboard_sender, keyboard_receiver) = sync::mpsc::channel(128);
+    spawn(async {
+        match enigo_controller(
+            mouse_pos_receiver,
+            mouse_buttons_receiver,
+            keyboard_receiver,
+        )
+        .await
+        {
+            Ok(_) => warn!("Enigo controller closed"),
+            Err(err) => error!("Enigo controller crashed with {err}"),
+        }
+    });
+
     let listener = TcpListener::bind("127.0.0.1:5900").await?;
 
-    while let Ok((stream, _addr)) = listener.accept().await {
-        spawn(handle_connexion(
-            stream,
-            width as u16,
-            height as u16,
-            receive_screen_frame.clone(),
-        ));
+    while let Ok((stream, addr)) = listener.accept().await {
+        let receive_screen_frame = receive_screen_frame.clone();
+        let mouse_pos_sender = mouse_pos_sender.clone();
+        let mouse_buttons_sender = mouse_buttons_sender.clone();
+        let keyboard_sender = keyboard_sender.clone();
+        spawn(async move {
+            match handle_connexion(
+                stream,
+                width as u16,
+                height as u16,
+                receive_screen_frame,
+                mouse_pos_sender,
+                mouse_buttons_sender,
+                keyboard_sender,
+            )
+            .await
+            {
+                Ok(_) => info!("Client {addr:?} disconnected"),
+                Err(err) => warn!("Client thread failed : {err}"),
+            }
+        });
     }
 
     Ok(())
@@ -76,11 +113,42 @@ fn capture(send_screen_frame: sync::watch::Sender<Frame>) -> Result<()> {
     }
 }
 
+async fn enigo_controller(
+    mut mouse_pos: sync::watch::Receiver<Pos>,
+    mut mouse_buttons_receiver: sync::mpsc::Receiver<MouseButtonMask>,
+    mut keyboard_receiver: sync::mpsc::Receiver<KeyEvent>,
+) -> Result<()> {
+    let minimal_time_between_pos_update = Duration::from_millis(25);
+
+    let mut enigo = enigo::Enigo::new(&enigo::Settings::default())?;
+
+    loop {
+        select! {
+            _ =  mouse_pos.changed() => {
+                let Pos { x_pos, y_pos } = mouse_pos.borrow().clone();
+                enigo.move_mouse(x_pos as i32, y_pos as i32, enigo::Coordinate::Abs)?;
+                sleep(minimal_time_between_pos_update).await;
+            }
+            Some(mask) = mouse_buttons_receiver.recv() => {
+                for (button, direction) in mask.into_enigo() {
+                    enigo.button(button, direction)?;
+                }
+            }
+            Some((flag, key)) = keyboard_receiver.recv() => {
+                enigo.key(xkeysym_into_enigo(key), flag.into())?;
+            }
+        }
+    }
+}
+
 async fn handle_connexion(
     mut stream: TcpStream,
     width: u16,
     height: u16,
     receive_screen_frame: sync::watch::Receiver<Frame>,
+    mouse_pos_sender: sync::watch::Sender<Pos>,
+    mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
+    keyboard_sender: sync::mpsc::Sender<KeyEvent>,
 ) -> Result<()> {
     Version::default().send(&mut stream).await?;
     let requested_version = Version::recv(&mut stream).await?;
@@ -105,6 +173,8 @@ async fn handle_connexion(
     }
     .send(&mut stream)
     .await?;
+
+    let mut prev_mouse_buttons = MouseButtonMask::default();
 
     while let Ok(client_msg) = ClientMessage::recv(&mut stream).await {
         match client_msg {
@@ -139,9 +209,16 @@ async fn handle_connexion(
             }
             ClientMessage::KeyEvent { pressed, key } => {
                 debug!("Client send key {pressed:?}, {key:?}");
+                keyboard_sender.send((pressed, key)).await?;
             }
             ClientMessage::PointerEvent { buttons, pos } => {
                 debug!("Client send mouse {buttons:?}, {pos:?}");
+                mouse_pos_sender.send_replace(pos);
+
+                if buttons != prev_mouse_buttons {
+                    mouse_buttons_sender.send(buttons).await?;
+                    prev_mouse_buttons = buttons;
+                }
             }
             ClientMessage::ClientCutText(text) => {
                 debug!("Client send clipboard {text}");

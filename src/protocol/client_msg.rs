@@ -3,8 +3,8 @@ use xkeysym::Keysym;
 
 use crate::protocol::{
     RecvFrom,
-    pixel_format::{Flag, PixelFormat},
-    primitives::{EncodingType, Pos, Rect},
+    pixel_format::PixelFormat,
+    primitives::{EncodingType, Flag, Pos, Rect},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,11 +68,33 @@ impl RecvFrom for ClientMessage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
 pub struct MouseButtonMask(u8);
 
 impl From<u8> for MouseButtonMask {
     fn from(value: u8) -> Self {
         MouseButtonMask(value)
+    }
+}
+
+impl MouseButtonMask {
+    pub fn into_enigo(&self) -> Vec<(enigo::Button, enigo::Direction)> {
+        let mut result = vec![];
+
+        result.push((enigo::Button::Left, bit_to_dir(self.0, 0)));
+        result.push((enigo::Button::Middle, bit_to_dir(self.0, 1)));
+        result.push((enigo::Button::Right, bit_to_dir(self.0, 2)));
+        result.push((enigo::Button::ScrollUp, bit_to_dir(self.0, 3)));
+        result.push((enigo::Button::ScrollDown, bit_to_dir(self.0, 4)));
+
+        result
+    }
+}
+
+fn bit_to_dir(mask: u8, shift: u8) -> enigo::Direction {
+    if (mask >> shift & 1) > 0 {
+        enigo::Direction::Press
+    } else {
+        enigo::Direction::Release
     }
 }

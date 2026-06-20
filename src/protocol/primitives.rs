@@ -1,3 +1,4 @@
+use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::protocol::{RecvFrom, SendInto};
@@ -39,7 +40,7 @@ impl SendInto for Rect {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Pos {
     pub x_pos: u16,
     pub y_pos: u16,
@@ -86,5 +87,22 @@ impl SendInto for Color8888 {
         stream.write_u8(self.b).await?;
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[repr(u8)]
+pub enum Flag {
+    No = 0,
+    #[default]
+    Yes = 1,
+}
+
+impl From<Flag> for enigo::Direction {
+    fn from(value: Flag) -> Self {
+        match value {
+            Flag::No => enigo::Direction::Release,
+            Flag::Yes => enigo::Direction::Press,
+        }
     }
 }

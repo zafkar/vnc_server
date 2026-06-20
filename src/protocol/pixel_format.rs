@@ -1,7 +1,7 @@
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::protocol::{RecvFrom, SendInto};
+use crate::protocol::{RecvFrom, SendInto, primitives::Flag};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PixelFormat {
@@ -92,12 +92,4 @@ pub enum BitsPerPixel {
 
     #[default]
     Invalid = 0xff,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
-#[repr(u8)]
-pub enum Flag {
-    No = 0,
-    #[default]
-    Yes = 1,
 }
