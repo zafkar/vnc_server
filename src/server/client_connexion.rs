@@ -67,11 +67,8 @@ impl ClientConnexion {
                 ClientMessage::SetEncodings(items) => {
                     debug!("Client asks for {items:?}");
                 }
-                ClientMessage::FramebufferUpdateRequest {
-                    incremental: _,
-                    rect,
-                } => {
-                    debug!("Client asks for {rect:?}");
+                ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
+                    debug!("Client asks for {rect:?}, incremental {incremental:?}");
                     let data = self.receive_screen_frame.borrow().clone();
                     let stride = data.len() / self.height as usize;
                     let mut result = vec![];
