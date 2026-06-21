@@ -3,8 +3,9 @@ use xkeysym::Keysym;
 
 use crate::protocol::{
     RecvFrom,
+    encodings::EncodingType,
     pixel_format::PixelFormat,
-    primitives::{EncodingType, Flag, Pos, Rect},
+    primitives::{Flag, Pos, Rect},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +31,7 @@ impl RecvFrom for ClientMessage {
                 let num_encodings = stream.read_u16().await?;
                 let mut encodings = vec![];
                 for _ in 0..num_encodings {
-                    encodings.push(stream.read_i32().await?);
+                    encodings.push(stream.read_i32().await?.into());
                 }
                 Self::SetEncodings(encodings)
             }

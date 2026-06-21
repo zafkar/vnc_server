@@ -2,7 +2,8 @@ use tokio::io::AsyncWriteExt;
 
 use crate::protocol::{
     SendInto,
-    primitives::{ColorMapEntry, EncodingType, Rect},
+    encodings::EncodingType,
+    primitives::{ColorMapEntry, Rect},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +73,7 @@ pub struct UpdateRect {
 impl SendInto for UpdateRect {
     async fn send<S: tokio::io::AsyncWrite + Unpin>(&self, mut stream: S) -> anyhow::Result<()> {
         self.rect.send(&mut stream).await?;
-        stream.write_i32(self.encoding_type).await?;
+        stream.write_i32(self.encoding_type.into()).await?;
         stream.write_all(&self.data).await?;
 
         Ok(())

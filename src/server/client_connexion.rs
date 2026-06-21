@@ -4,6 +4,7 @@ use crate::{
     protocol::{
         RecvFrom, SendInto,
         client_msg::{ClientMessage, MouseButtonMask},
+        encodings::{Encoder, EncodingType, raw::RawEncoder},
         handshake::{
             init::{ClientInit, ServerInit},
             security::{SecurityResult, SecurityType},
@@ -19,12 +20,13 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync,
 };
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Debug)]
 pub(super) struct ClientConnexion {
     pub width: u16,
     pub height: u16,
+    pub pixel_format: PixelFormat,
     pub receive_screen_frame: sync::watch::Receiver<Frame>,
     pub mouse_pos_sender: sync::watch::Sender<Pos>,
     pub mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
@@ -41,7 +43,7 @@ impl ClientConnexion {
         available_security.send(&mut stream).await?;
 
         let requested_security = SecurityType::recv(&mut stream).await?;
-        debug!("Requested security is {requested_security:?}");
+        info!("Requested security is {requested_security:?}");
 
         SecurityResult::Ok.send(&mut stream).await?;
 
@@ -57,6 +59,7 @@ impl ClientConnexion {
         .send(&mut stream)
         .await?;
 
+        let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
         let mut prev_mouse_buttons = MouseButtonMask::default();
 
         while let Ok(client_msg) = ClientMessage::recv(&mut stream).await {
@@ -65,7 +68,14 @@ impl ClientConnexion {
                     debug!("Client asks for {pixel_format:?}");
                 }
                 ClientMessage::SetEncodings(items) => {
-                    debug!("Client asks for {items:?}");
+                    info!("Client propose {items:?} as encodings");
+                    let encoding_type = EncodingType::pick_encoder(&items);
+                    info!("{encoding_type:?} choosen");
+                    encoder = encoding_type.init_encoder(
+                        self.width,
+                        self.height,
+                        self.pixel_format.clone(),
+                    );
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
@@ -74,8 +84,8 @@ impl ClientConnexion {
                         self.receive_screen_frame.mark_unchanged();
                         ServerMessage::FramebufferUpdate(vec![UpdateRect {
                             rect,
-                            encoding_type: 0,
-                            data: data.get_src_rect(rect, self.height as usize),
+                            encoding_type: encoder.encoding_type(),
+                            data: encoder.encode(&data.get_src_rect(rect, self.height as usize))?,
                         }])
                         .send(&mut stream)
                         .await?;

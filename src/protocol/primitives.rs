@@ -3,8 +3,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::protocol::{RecvFrom, SendInto};
 
-pub type EncodingType = i32;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Rect {
     pub x_pos: u16,
@@ -96,6 +94,15 @@ pub enum Flag {
     No = 0,
     #[default]
     Yes = 1,
+}
+
+impl Flag {
+    pub fn flip(self) -> Flag {
+        match self {
+            Flag::No => Flag::Yes,
+            Flag::Yes => Flag::No,
+        }
+    }
 }
 
 impl From<Flag> for enigo::Direction {

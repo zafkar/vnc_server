@@ -2,6 +2,7 @@ use anyhow::Result;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub mod client_msg;
+pub mod encodings;
 pub mod handshake;
 pub mod pixel_format;
 pub mod primitives;
