@@ -8,10 +8,14 @@ anyhow = "1.0.102"
 enigo = { version = "0.6.1", features = ["tokio"] }
 flate2 = "1.1.9"
 num_enum = "0.7.6"
-rfb-encodings = "0.1.7"
+rfb-encodings = { version = "0.1.7", optional = true}
 scrap = "0.5.0"
 tokio = { version = "1.52.3", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+
+[features]
+default = ["enconding_zrle"]
+enconding_zrle = ["dep:rfb-encodings"]

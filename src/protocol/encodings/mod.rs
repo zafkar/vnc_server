@@ -1,15 +1,18 @@
 use anyhow::Result;
-use flate2::{Compress, Compression};
+
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tracing::warn;
 
-use crate::protocol::{
-    encodings::{raw::RawEncoder, zrle::ZRLEEncoder},
-    pixel_format::PixelFormat,
-};
+use crate::protocol::{encodings::raw::RawEncoder, pixel_format::PixelFormat};
 
 pub mod raw;
+
+#[cfg(feature = "enconding_zrle")]
 pub mod zrle;
+#[cfg(feature = "enconding_zrle")]
+use crate::protocol::encodings::zrle::ZRLEEncoder;
+#[cfg(feature = "enconding_zrle")]
+use flate2::{Compress, Compression};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
 #[repr(i32)]
@@ -23,6 +26,7 @@ pub enum EncodingType {
     // Zlib = 6,
     // Tight = 7,
     // ZLibHex = 8,
+    #[cfg(feature = "enconding_zrle")]
     ZRLE = 16,
     // JPEG = 21,
     // OpenH264 = 50,
@@ -42,6 +46,7 @@ impl EncodingType {
     ) -> Box<dyn Encoder> {
         match self {
             EncodingType::Raw => Box::new(RawEncoder),
+            #[cfg(feature = "enconding_zrle")]
             EncodingType::ZRLE => Box::new(ZRLEEncoder {
                 width,
                 height,
