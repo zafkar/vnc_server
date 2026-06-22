@@ -1,8 +1,10 @@
 use anyhow::Result;
 use num_enum::{FromPrimitive, IntoPrimitive};
-use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::protocol::{RecvFrom, SendInto};
+
+mod vnc_authent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
 #[repr(u8)]
@@ -10,7 +12,21 @@ pub enum SecurityType {
     #[default]
     Invalid = 0,
     None = 1,
-    VNCAutherntication = 2,
+    VNCAuthentication = 2,
+}
+
+impl SecurityType {
+    pub async fn check_password<S: AsyncWrite + AsyncRead + Unpin>(
+        &self,
+        stream: S,
+        password: &str,
+    ) -> Result<bool> {
+        match self {
+            SecurityType::Invalid => Ok(false),
+            SecurityType::None => Ok(true),
+            SecurityType::VNCAuthentication => vnc_authent::check(stream, password).await,
+        }
+    }
 }
 
 impl SendInto for Vec<SecurityType> {

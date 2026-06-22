@@ -9,6 +9,7 @@ use crate::{
             init::{ClientInit, ServerInit},
             security::{SecurityResult, SecurityType},
             version::Version,
+            write_handshake_error,
         },
         pixel_format::PixelFormat,
         primitives::{Flag, Pos},
@@ -20,7 +21,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync,
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug)]
 pub(super) struct ClientConnexion {
@@ -39,13 +40,30 @@ impl ClientConnexion {
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
 
-        let available_security = vec![SecurityType::None];
+        let available_security = vec![SecurityType::VNCAuthentication];
         available_security.send(&mut stream).await?;
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");
-
-        SecurityResult::Ok.send(&mut stream).await?;
+        match requested_security
+            .check_password(&mut stream, "password")
+            .await
+        {
+            Ok(true) => SecurityResult::Ok.send(&mut stream).await?,
+            Ok(false) => {
+                SecurityResult::Failed.send(&mut stream).await?;
+                write_handshake_error(&mut stream, "Wrong password").await?;
+                warn!("Client failed to authenticate");
+                return Ok(());
+            }
+            Err(err) => {
+                SecurityResult::Failed.send(&mut stream).await?;
+                write_handshake_error(&mut stream, &format!("Authentication failed : {err}"))
+                    .await?;
+                error!("Authentication failed : {err}");
+                return Ok(());
+            }
+        }
 
         let client_init = ClientInit::recv(&mut stream).await?;
         debug!("{client_init:?}");
