@@ -1,5 +1,5 @@
 use anyhow::Result;
-use des::cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit, consts::U8};
+use des::cipher::{ BlockCipherEncrypt, KeyInit, consts::U8};
 use rand::RngExt;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::debug;
