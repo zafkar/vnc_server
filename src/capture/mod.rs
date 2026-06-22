@@ -5,6 +5,8 @@ use scrap::Display;
 use tokio::sync;
 use xxhash_rust::xxh3::xxh3_128;
 
+use crate::protocol::pixel_format::PixelFormat;
+
 pub mod frame;
 
 pub type Frame = frame::Frame;
@@ -40,7 +42,10 @@ impl Capturer {
                 let data = frame.to_vec();
                 let data_hash = xxh3_128(&data);
                 if prev_data_hash != data_hash {
-                    self.send_screen_frame.send_replace(frame::Frame(data));
+                    self.send_screen_frame.send_replace(frame::Frame {
+                        data,
+                        format: self.get_pixel_format(),
+                    });
                     prev_data_hash = data_hash
                 }
             }
@@ -54,5 +59,20 @@ impl Capturer {
             Err(err) => return Err(anyhow!("Can't get Display : {err}")),
         };
         Ok((display.width(), display.height()))
+    }
+
+    pub fn get_pixel_format(&self) -> PixelFormat {
+        PixelFormat {
+            bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U32,
+            depth: 24,
+            big_endian: crate::protocol::primitives::Flag::Yes,
+            true_color: crate::protocol::primitives::Flag::Yes,
+            red_max: 255,
+            green_max: 255,
+            blue_max: 255,
+            red_shift: 8,
+            green_shift: 16,
+            blue_shift: 24,
+        }
     }
 }

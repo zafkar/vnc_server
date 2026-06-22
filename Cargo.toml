@@ -19,5 +19,5 @@ xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [features]
-default = ["enconding_zrle"]
-enconding_zrle = ["dep:rfb-encodings"]
+default = ["encoding_zrle"]
+encoding_zrle = ["dep:rfb-encodings"]
