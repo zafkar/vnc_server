@@ -64,7 +64,7 @@ impl VNCServer {
                 mouse_pos_sender: mouse_pos_sender.clone(),
                 mouse_buttons_sender: mouse_buttons_sender.clone(),
                 keyboard_sender: keyboard_sender.clone(),
-                pixel_format: pixel_format,
+                pixel_format,
             };
             spawn(async move {
                 match client.start(stream).await {
