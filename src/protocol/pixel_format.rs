@@ -84,15 +84,15 @@ impl From<PixelFormat> for rfb_encodings::PixelFormat {
     fn from(value: PixelFormat) -> Self {
         rfb_encodings::PixelFormat {
             bits_per_pixel: value.bits_per_pixel.into(),
-            depth: value.depth.into(),
+            depth: value.depth,
             big_endian_flag: value.big_endian.into(),
             true_colour_flag: value.true_color.into(),
-            red_max: value.red_max.into(),
-            green_max: value.green_max.into(),
-            blue_max: value.blue_max.into(),
-            red_shift: value.red_shift.into(),
-            green_shift: value.green_shift.into(),
-            blue_shift: value.blue_shift.into(),
+            red_max: value.red_max,
+            green_max: value.green_max,
+            blue_max: value.blue_max,
+            red_shift: value.red_shift,
+            green_shift: value.green_shift,
+            blue_shift: value.blue_shift,
         }
     }
 }
