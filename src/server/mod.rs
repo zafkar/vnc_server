@@ -3,7 +3,6 @@ use std::time::Duration;
 use crate::{
     capture::Capturer,
     input_controller::{Controller, ControllerChannels},
-    protocol::pixel_format::PixelFormat,
     server::client_connexion::ClientConnexion,
 };
 use anyhow::Result;
@@ -36,6 +35,7 @@ impl VNCServer {
         let (width, height) = Capturer::get_screen_size()?;
 
         let (mut capturer, receive_screen_frame) = Capturer::new(self.time_between_frame);
+        let pixel_format = capturer.get_pixel_format();
         spawn_blocking(move || capturer.start());
         debug!("Display Capture started");
 
@@ -64,7 +64,7 @@ impl VNCServer {
                 mouse_pos_sender: mouse_pos_sender.clone(),
                 mouse_buttons_sender: mouse_buttons_sender.clone(),
                 keyboard_sender: keyboard_sender.clone(),
-                pixel_format: PixelFormat::default(),
+                pixel_format: pixel_format,
             };
             spawn(async move {
                 match client.start(stream).await {

@@ -1,28 +1,91 @@
+use anyhow::{Result, anyhow};
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::protocol::{RecvFrom, SendInto, primitives::Flag};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct PixelFormat {
-    bits_per_pixel: BitsPerPixel,
-    depth: u8,
-    big_endian: Flag,
-    true_color: Flag,
-    red_max: u16,
-    green_max: u16,
-    blue_max: u16,
-    red_shift: u8,
-    green_shift: u8,
-    blue_shift: u8,
+    pub bits_per_pixel: BitsPerPixel,
+    pub depth: u8,
+    pub big_endian: Flag,
+    pub true_color: Flag,
+    pub red_max: u16,
+    pub green_max: u16,
+    pub blue_max: u16,
+    pub red_shift: u8,
+    pub green_shift: u8,
+    pub blue_shift: u8,
 }
 
+impl PixelFormat {
+    pub fn convert_data_to_pixel_format(
+        &self,
+        target_format: &PixelFormat,
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        if self.true_color == Flag::No || target_format.true_color == Flag::No {
+            return Err(anyhow!(
+                "Conversion from true_color to palette not implemented"
+            ));
+        }
+
+        let grouped_data = match self.bits_per_pixel {
+            BitsPerPixel::U8 => data
+                .iter()
+                .map(|b| Ok(*b as u32))
+                .collect::<Result<Vec<u32>>>(),
+            BitsPerPixel::U16 => data
+                .chunks(2)
+                .map(|group| match self.big_endian {
+                    Flag::No => Ok(u16::from_le_bytes(group.try_into()?) as u32),
+                    Flag::Yes => Ok(u16::from_be_bytes(group.try_into()?) as u32),
+                })
+                .collect::<Result<Vec<u32>>>(),
+            BitsPerPixel::U32 => data
+                .chunks(4)
+                .map(|group| match self.big_endian {
+                    Flag::No => Ok(u32::from_le_bytes(group.try_into()?)),
+                    Flag::Yes => Ok(u32::from_be_bytes(group.try_into()?)),
+                })
+                .collect::<Result<Vec<u32>>>(),
+            BitsPerPixel::Invalid => Err(anyhow!("Invalid encoding size")),
+        }?;
+
+        Ok(grouped_data
+            .iter()
+            .flat_map(|src_color| {
+                let red = (src_color >> self.red_shift & self.red_max as u32)
+                    * target_format.red_max as u32
+                    / self.red_max as u32;
+                let green = (src_color >> self.green_shift & self.green_max as u32)
+                    * target_format.green_max as u32
+                    / self.green_max as u32;
+                let blue = (src_color >> self.blue_shift & self.blue_max as u32)
+                    * target_format.blue_max as u32
+                    / self.blue_max as u32;
+
+                let dest_color = red << target_format.red_shift
+                    | green << target_format.green_shift
+                    | blue << target_format.blue_shift;
+
+                match target_format.big_endian {
+                    Flag::No => dest_color.to_le_bytes(),
+                    Flag::Yes => dest_color.to_be_bytes(),
+                }
+                .into_iter()
+            })
+            .collect())
+    }
+}
+
+#[cfg(feature = "encoding_zrle")]
 impl From<PixelFormat> for rfb_encodings::PixelFormat {
     fn from(value: PixelFormat) -> Self {
         rfb_encodings::PixelFormat {
             bits_per_pixel: value.bits_per_pixel.into(),
             depth: value.depth.into(),
-            big_endian_flag: value.big_endian.flip().into(),
+            big_endian_flag: value.big_endian.into(),
             true_colour_flag: value.true_color.into(),
             red_max: value.red_max.into(),
             green_max: value.green_max.into(),

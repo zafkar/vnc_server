@@ -71,7 +71,7 @@ impl ClientConnexion {
         ServerInit {
             fb_width: self.width,
             fb_height: self.height,
-            pixel_format: PixelFormat::default(),
+            pixel_format: self.pixel_format,
             name: String::from("Test server"),
         }
         .send(&mut stream)
@@ -79,11 +79,18 @@ impl ClientConnexion {
 
         let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
         let mut prev_mouse_buttons = MouseButtonMask::default();
+        let mut target_pixel_format = None;
 
         while let Ok(client_msg) = ClientMessage::recv(&mut stream).await {
             match client_msg {
                 ClientMessage::SetPixelFormat(pixel_format) => {
-                    debug!("Client asks for {pixel_format:?}");
+                    info!("Client asks for {pixel_format:?}");
+                    target_pixel_format = Some(pixel_format);
+                    info!("Reinitializing encoder");
+                    encoder =
+                        encoder
+                            .encoding_type()
+                            .init_encoder(self.width, self.height, pixel_format);
                 }
                 ClientMessage::SetEncodings(items) => {
                     info!("Client propose {items:?} as encodings");
@@ -92,7 +99,7 @@ impl ClientConnexion {
                     encoder = encoding_type.init_encoder(
                         self.width,
                         self.height,
-                        self.pixel_format.clone(),
+                        target_pixel_format.unwrap_or(self.pixel_format),
                     );
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
@@ -100,10 +107,17 @@ impl ClientConnexion {
                     if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
                         let data = self.receive_screen_frame.borrow().clone();
                         self.receive_screen_frame.mark_unchanged();
+                        let dest_pixel_format_data = match &target_pixel_format {
+                            Some(dest_format) => self.pixel_format.convert_data_to_pixel_format(
+                                dest_format,
+                                &data.get_src_rect(rect, self.height as usize),
+                            )?,
+                            None => data.get_src_rect(rect, self.height as usize),
+                        };
                         ServerMessage::FramebufferUpdate(vec![UpdateRect {
                             rect,
                             encoding_type: encoder.encoding_type(),
-                            data: encoder.encode(&data.get_src_rect(rect, self.height as usize))?,
+                            data: encoder.encode(&dest_pixel_format_data)?,
                         }])
                         .send(&mut stream)
                         .await?;
