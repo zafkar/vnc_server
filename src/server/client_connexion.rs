@@ -114,11 +114,9 @@ impl ClientConnexion {
                             )?,
                             None => data.get_src_rect(rect, self.height as usize),
                         };
-                        ServerMessage::FramebufferUpdate(vec![UpdateRect {
-                            rect,
-                            encoding_type: encoder.encoding_type(),
-                            data: encoder.encode(&dest_pixel_format_data)?,
-                        }])
+                        ServerMessage::FramebufferUpdate(
+                            encoder.encode(rect, &dest_pixel_format_data)?,
+                        )
                         .send(&mut stream)
                         .await?;
                     } else {

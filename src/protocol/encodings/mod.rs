@@ -3,10 +3,14 @@ use anyhow::Result;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tracing::warn;
 
-use crate::protocol::{encodings::raw::RawEncoder, pixel_format::PixelFormat};
+use crate::protocol::{
+    encodings::raw::RawEncoder, pixel_format::PixelFormat, primitives::Rect, server_msg::UpdateRect,
+};
 
 pub mod raw;
 
+#[cfg(feature = "encoding_tight")]
+pub mod tight;
 #[cfg(feature = "encoding_zrle")]
 pub mod zrle;
 #[cfg(feature = "encoding_zrle")]
@@ -24,7 +28,8 @@ pub enum EncodingType {
     // CoRRE = 4,
     // Hextile = 5,
     // Zlib = 6,
-    // Tight = 7,
+    #[cfg(feature = "encoding_tight")]
+    Tight = 7,
     // ZLibHex = 8,
     #[cfg(feature = "encoding_zrle")]
     ZRLE = 16,
@@ -53,6 +58,18 @@ impl EncodingType {
                 compressor: Compress::new(Compression::fast(), true),
                 pixel_format: pixel_format.into(),
             }),
+            #[cfg(feature = "encoding_tight")]
+            EncodingType::Tight => {
+                let compression_level = 6;
+                Box::new(crate::protocol::encodings::tight::TightEncoder {
+                    width,
+                    height,
+                    compressor: rfb_encodings::tight::SimpleTightCompressor::new(compression_level),
+                    pixel_format: pixel_format.into(),
+                    quality: 6,
+                    compression_level,
+                })
+            }
         }
     }
 
@@ -68,6 +85,6 @@ impl EncodingType {
 }
 
 pub trait Encoder: Send {
-    fn encode(&mut self, data: &[u8]) -> Result<Vec<u8>>;
+    fn encode(&mut self, requested_rect: Rect, data: &[u8]) -> Result<Vec<UpdateRect>>;
     fn encoding_type(&self) -> EncodingType;
 }
