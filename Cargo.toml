@@ -21,3 +21,4 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 [features]
 default = ["encoding_zrle"]
 encoding_zrle = ["dep:rfb-encodings"]
+encoding_tight = ["dep:rfb-encodings"]

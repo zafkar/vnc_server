@@ -10,17 +10,27 @@ pub struct ZRLEEncoder {
 }
 
 impl Encoder for ZRLEEncoder {
-    fn encode(&mut self, data: &[u8]) -> Result<Vec<u8>> {
-        Ok(rfb_encodings::zrle::encode_zrle_persistent(
+    fn encoding_type(&self) -> super::EncodingType {
+        super::EncodingType::ZRLE
+    }
+
+    fn encode(
+        &mut self,
+        requested_rect: crate::protocol::primitives::Rect,
+        data: &[u8],
+    ) -> Result<Vec<crate::protocol::server_msg::UpdateRect>> {
+        let encoded_data = rfb_encodings::zrle::encode_zrle_persistent(
             data,
             self.width,
             self.height,
             &self.pixel_format,
             &mut self.compressor,
-        )?)
-    }
+        )?;
 
-    fn encoding_type(&self) -> super::EncodingType {
-        super::EncodingType::ZRLE
+        Ok(vec![crate::protocol::server_msg::UpdateRect {
+            rect: requested_rect,
+            encoding_type: self.encoding_type(),
+            data: encoded_data,
+        }])
     }
 }
