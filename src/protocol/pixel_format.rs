@@ -69,11 +69,18 @@ impl PixelFormat {
                     | green << target_format.green_shift
                     | blue << target_format.blue_shift;
 
-                match target_format.big_endian {
-                    Flag::No => dest_color.to_le_bytes(),
-                    Flag::Yes => dest_color.to_be_bytes(),
+                match target_format.bits_per_pixel {
+                    BitsPerPixel::U8 => vec![dest_color as u8],
+                    BitsPerPixel::U16 => match target_format.big_endian {
+                        Flag::No => (dest_color as u16).to_le_bytes().to_vec(),
+                        Flag::Yes => (dest_color as u16).to_be_bytes().to_vec(),
+                    },
+                    BitsPerPixel::U32 => match target_format.big_endian {
+                        Flag::No => dest_color.to_le_bytes().to_vec(),
+                        Flag::Yes => dest_color.to_be_bytes().to_vec(),
+                    },
+                    BitsPerPixel::Invalid => unimplemented!("Invalid BitsPerPixel in PixelFormat"),
                 }
-                .into_iter()
             })
             .collect())
     }
