@@ -30,6 +30,10 @@ impl PixelFormat {
             ));
         }
 
+        if self == target_format {
+            return Ok(data.to_vec());
+        }
+
         let grouped_data = match self.bits_per_pixel {
             BitsPerPixel::U8 => data
                 .iter()

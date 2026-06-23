@@ -3,6 +3,7 @@ use std::time::Duration;
 use crate::{
     capture::Capturer,
     input_controller::{Controller, ControllerChannels},
+    protocol::pixel_format::PixelFormat,
     server::client_connexion::ClientConnexion,
 };
 use anyhow::Result;
@@ -67,7 +68,18 @@ impl VNCServer {
                 mouse_pos_sender: mouse_pos_sender.clone(),
                 mouse_buttons_sender: mouse_buttons_sender.clone(),
                 keyboard_sender: keyboard_sender.clone(),
-                pixel_format,
+                pixel_format: PixelFormat {
+                    bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U16,
+                    depth: 16,
+                    big_endian: crate::protocol::primitives::Flag::Yes,
+                    true_color: crate::protocol::primitives::Flag::Yes,
+                    red_max: 31,
+                    green_max: 63,
+                    blue_max: 31,
+                    red_shift: 11,
+                    green_shift: 5,
+                    blue_shift: 0,
+                },
             };
             spawn(async move {
                 match client.start(stream).await {
