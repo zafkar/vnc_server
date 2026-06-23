@@ -8,14 +8,29 @@ pub struct Frame {
 
 impl Frame {
     pub fn get_src_rect(&self, rect: Rect, height: usize) -> Vec<u8> {
+        let bpp = self.format.bits_per_pixel.bytes_size();
         let stride = self.data.len() / height;
-        let mut result = vec![];
-        for y in rect.y_pos..rect.height {
-            for x in rect.x_pos..rect.width {
-                let i = stride * y as usize + 4 * x as usize;
-                result.extend_from_slice(&self.data.get(i..i + 4).unwrap_or(&[0u8; 4]));
+
+        let start_x = rect.x_pos as usize * bpp;
+        let row_size = rect.width as usize * bpp;
+
+        let mut result = Vec::with_capacity(row_size * rect.height as usize);
+
+        let mut y_index = stride * rect.y_pos as usize;
+
+        for _ in 0..rect.height {
+            let start = y_index + start_x;
+            let end = start + row_size;
+
+            if end <= self.data.len() {
+                result.extend_from_slice(&self.data[start..end]);
+            } else {
+                result.extend(std::iter::repeat(0).take(row_size));
             }
+
+            y_index += stride;
         }
+
         result
     }
 }

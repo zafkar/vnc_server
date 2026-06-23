@@ -45,9 +45,9 @@ impl EncodingType {
 
     pub fn init_encoder(
         &self,
-        width: u16,
-        height: u16,
-        pixel_format: PixelFormat,
+        #[allow(unused)] width: u16,
+        #[allow(unused)] height: u16,
+        #[allow(unused)] pixel_format: PixelFormat,
     ) -> Box<dyn Encoder> {
         match self {
             EncodingType::Raw => Box::new(RawEncoder),

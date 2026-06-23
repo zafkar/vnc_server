@@ -20,7 +20,6 @@ use anyhow::Result;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync,
-    time::Instant,
 };
 use tracing::{debug, error, info, warn};
 
@@ -106,7 +105,6 @@ impl ClientConnexion {
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
                     if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
-                        let start_time = Instant::now();
                         let data = self.receive_screen_frame.borrow().clone();
                         self.receive_screen_frame.mark_unchanged();
                         let dest_pixel_format_data = match &target_pixel_format {
@@ -124,7 +122,6 @@ impl ClientConnexion {
                         )
                         .send(&mut stream)
                         .await?;
-                        info!("RF update_time : {:?}", start_time.elapsed());
                     } else {
                         ServerMessage::FramebufferUpdate(vec![])
                             .send(&mut stream)

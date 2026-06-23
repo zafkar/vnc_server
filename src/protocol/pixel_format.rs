@@ -184,3 +184,14 @@ pub enum BitsPerPixel {
     #[default]
     Invalid = 0xff,
 }
+
+impl BitsPerPixel{
+    pub fn bytes_size(&self) -> usize{
+        match self {
+            BitsPerPixel::U8 => 1,
+            BitsPerPixel::U16 => 2,
+            BitsPerPixel::U32 => 4,
+            BitsPerPixel::Invalid => unimplemented!("BitsPerPixel Invalid"),
+        }
+    }
+}
