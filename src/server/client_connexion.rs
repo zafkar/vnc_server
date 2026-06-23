@@ -40,7 +40,7 @@ impl ClientConnexion {
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
 
-        let available_security = vec![SecurityType::VNCAuthentication];
+        let available_security = vec![SecurityType::None];
         available_security.send(&mut stream).await?;
 
         let requested_security = SecurityType::recv(&mut stream).await?;

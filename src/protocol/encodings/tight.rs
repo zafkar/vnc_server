@@ -1,4 +1,4 @@
-use crate::protocol::encodings::Encoder;
+use crate::protocol::{encodings::Encoder, primitives::Rect, server_msg::UpdateRect};
 
 pub struct TightEncoder {
     pub width: u16,
@@ -10,30 +10,11 @@ pub struct TightEncoder {
 }
 
 impl Encoder for TightEncoder {
-    // fn encode(&mut self, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-    //     let a = rfb_encodings::tight::encode_tight_rects(
-    //         data,
-    //         self.width,
-    //         self.height,
-    //         self.quality,
-    //         self.compression_level,
-    //         &self.pixel_format,
-    //         &mut self.compressor,
-    //     );
-    //     let b = a[0].4.iter().cloned().collect::<Vec<u8>>();
-
-    //     todo!()
-    // }
-
     fn encoding_type(&self) -> super::EncodingType {
         super::EncodingType::Tight
     }
 
-    fn encode(
-        &mut self,
-        requested_rect: crate::protocol::primitives::Rect,
-        data: &[u8],
-    ) -> anyhow::Result<Vec<crate::protocol::server_msg::UpdateRect>> {
+    fn encode(&mut self, _requested_rect: Rect, data: &[u8]) -> anyhow::Result<Vec<UpdateRect>> {
         let encoded_data = rfb_encodings::tight::encode_tight_rects(
             data,
             self.width,
@@ -44,10 +25,18 @@ impl Encoder for TightEncoder {
             &mut self.compressor,
         );
 
-        Ok(vec![crate::protocol::server_msg::UpdateRect {
-            rect: requested_rect,
-            encoding_type: self.encoding_type(),
-            data: encoded_data[0].4.iter().cloned().collect::<Vec<u8>>(),
-        }])
+        Ok(encoded_data
+            .iter()
+            .map(|u| UpdateRect {
+                rect: Rect {
+                    x_pos: u.0,
+                    y_pos: u.1,
+                    width: u.2,
+                    height: u.3,
+                },
+                encoding_type: self.encoding_type(),
+                data: u.4.iter().cloned().collect(),
+            })
+            .collect())
     }
 }
