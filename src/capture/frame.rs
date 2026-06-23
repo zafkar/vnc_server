@@ -13,7 +13,7 @@ impl Frame {
         for y in rect.y_pos..rect.height {
             for x in rect.x_pos..rect.width {
                 let i = stride * y as usize + 4 * x as usize;
-                result.extend_from_slice(&self.data[i..i + 4]);
+                result.extend_from_slice(&self.data.get(i..i + 4).unwrap_or(&[0u8; 4]));
             }
         }
         result
