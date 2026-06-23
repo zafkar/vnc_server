@@ -3,6 +3,7 @@ use std::time::Duration;
 use anyhow::{Result, anyhow};
 use scrap::Display;
 use tokio::sync;
+use tracing::debug;
 use xxhash_rust::xxh3::xxh3_128;
 
 use crate::protocol::pixel_format::PixelFormat;
@@ -33,12 +34,22 @@ impl Capturer {
             Err(err) => return Err(anyhow!("Can't get Display : {err}")),
         };
 
+        debug!("Getting Capture for display");
+
         let mut recorder = scrap::Capturer::new(display)?;
 
+        debug!("Starting capture loop");
         let mut prev_data_hash = 0;
         loop {
-            if self.send_screen_frame.receiver_count() > 0 {
-                let frame = recorder.frame()?;
+            if self.send_screen_frame.receiver_count() > 1 {
+                let frame = match recorder.frame() {
+                    Ok(frame) => frame,
+                    Err(ref err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(self.time_between_frame);
+                        continue;
+                    }
+                    Err(err) => return Err(err.into()),
+                };
                 let data = frame.to_vec();
                 let data_hash = xxh3_128(&data);
                 if prev_data_hash != data_hash {

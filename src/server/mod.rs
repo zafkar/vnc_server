@@ -23,7 +23,7 @@ impl Default for VNCServer {
         Self {
             bind_address: "0.0.0.0:5900".to_string(),
             channel_size: 128,
-            time_between_frame: Duration::from_millis(15),
+            time_between_frame: Duration::from_millis(50),
         }
     }
 }
@@ -36,8 +36,11 @@ impl VNCServer {
 
         let (mut capturer, receive_screen_frame) = Capturer::new(self.time_between_frame);
         let pixel_format = capturer.get_pixel_format();
-        spawn_blocking(move || capturer.start());
-        debug!("Display Capture started");
+        spawn_blocking(move || match capturer.start() {
+            Ok(_) => warn!("Capture thread closed"),
+            Err(err) => error!("Capture thread crashed with {err}"),
+        });
+        info!("Display Capture started");
 
         let (
             mut controller,
