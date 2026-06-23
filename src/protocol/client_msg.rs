@@ -1,4 +1,5 @@
 use tokio::io::AsyncReadExt;
+use tracing::debug;
 use xkeysym::Keysym;
 
 use crate::protocol::{
@@ -31,7 +32,9 @@ impl RecvFrom for ClientMessage {
                 let num_encodings = stream.read_u16().await?;
                 let mut encodings = vec![];
                 for _ in 0..num_encodings {
-                    encodings.push(stream.read_i32().await?.into());
+                    let encoding_code = stream.read_i32().await?;
+                    debug!("Client requested encoding {encoding_code}");
+                    encodings.push(encoding_code.into());
                 }
                 Self::SetEncodings(encodings)
             }

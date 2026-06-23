@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use tokio::{net::TcpListener, spawn, task::spawn_blocking};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 mod client_connexion;
 

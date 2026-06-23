@@ -76,14 +76,14 @@ impl Capturer {
         PixelFormat {
             bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U32,
             depth: 24,
-            big_endian: crate::protocol::primitives::Flag::Yes,
+            big_endian: crate::protocol::primitives::Flag::No,
             true_color: crate::protocol::primitives::Flag::Yes,
             red_max: 255,
             green_max: 255,
             blue_max: 255,
-            red_shift: 8,
-            green_shift: 16,
-            blue_shift: 24,
+            red_shift: 16,
+            green_shift: 8,
+            blue_shift: 0,
         }
     }
 }
