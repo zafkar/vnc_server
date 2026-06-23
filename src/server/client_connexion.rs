@@ -13,7 +13,7 @@ use crate::{
         },
         pixel_format::PixelFormat,
         primitives::{Flag, Pos},
-        server_msg::{ServerMessage, UpdateRect},
+        server_msg::ServerMessage,
     },
 };
 use anyhow::Result;
