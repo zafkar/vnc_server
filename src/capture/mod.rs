@@ -1,12 +1,10 @@
-use std::time::Duration;
-
 use anyhow::{Result, anyhow};
 use scrap::Display;
 use tokio::sync;
 use tracing::debug;
 use xxhash_rust::xxh3::xxh3_128;
 
-use crate::protocol::pixel_format::PixelFormat;
+use crate::{config::CaptureConfig, protocol::pixel_format::PixelFormat};
 
 pub mod frame;
 
@@ -14,16 +12,16 @@ pub type Frame = frame::Frame;
 
 pub struct Capturer {
     send_screen_frame: sync::watch::Sender<Frame>,
-    time_between_frame: Duration,
+    config: CaptureConfig,
 }
 
 impl Capturer {
-    pub fn new(time_between_frame: Duration) -> (Self, sync::watch::Receiver<Frame>) {
+    pub fn new(config: CaptureConfig) -> (Self, sync::watch::Receiver<Frame>) {
         let (send_screen_frame, receive_screen_frame) = sync::watch::channel(Frame::default());
         (
             Self {
                 send_screen_frame,
-                time_between_frame,
+                config,
             },
             receive_screen_frame,
         )
@@ -45,7 +43,7 @@ impl Capturer {
                 let frame = match recorder.frame() {
                     Ok(frame) => frame,
                     Err(ref err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                        std::thread::sleep(self.time_between_frame);
+                        std::thread::sleep(self.config.time_between_frame);
                         continue;
                     }
                     Err(err) => return Err(err.into()),
@@ -60,7 +58,7 @@ impl Capturer {
                     prev_data_hash = data_hash
                 }
             }
-            std::thread::sleep(self.time_between_frame);
+            std::thread::sleep(self.config.time_between_frame);
         }
     }
 

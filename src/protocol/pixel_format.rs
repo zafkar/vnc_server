@@ -4,7 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::protocol::{RecvFrom, SendInto, primitives::Flag};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct PixelFormat {
     pub bits_per_pixel: BitsPerPixel,
     pub depth: u8,
@@ -110,11 +110,12 @@ impl From<PixelFormat> for rfb_encodings::PixelFormat {
 
 impl Default for PixelFormat {
     fn default() -> Self {
-        Self {
-            bits_per_pixel: BitsPerPixel::U32,
+        //Format that the scrap::Capturer outputs
+        PixelFormat {
+            bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U32,
             depth: 24,
-            big_endian: Flag::Yes,
-            true_color: Flag::Yes,
+            big_endian: crate::protocol::primitives::Flag::No,
+            true_color: crate::protocol::primitives::Flag::Yes,
             red_max: 255,
             green_max: 255,
             blue_max: 255,
@@ -174,7 +175,17 @@ impl RecvFrom for PixelFormat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    FromPrimitive,
+    IntoPrimitive,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 #[repr(u8)]
 pub enum BitsPerPixel {
     U8 = 8,
@@ -185,8 +196,8 @@ pub enum BitsPerPixel {
     Invalid = 0xff,
 }
 
-impl BitsPerPixel{
-    pub fn bytes_size(&self) -> usize{
+impl BitsPerPixel {
+    pub fn bytes_size(&self) -> usize {
         match self {
             BitsPerPixel::U8 => 1,
             BitsPerPixel::U16 => 2,

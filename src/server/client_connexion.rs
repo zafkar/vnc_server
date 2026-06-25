@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    auth_provider::{SecurityResult, file_auth::FileAuthProvider},
+    auth_provider::{AuthProvider, SecurityResult},
     capture::Frame,
     input_controller::KeyEvent,
     protocol::{
@@ -26,16 +26,16 @@ use tokio::{
 };
 use tracing::{debug, error, info, warn};
 
-#[derive(Debug)]
 pub(super) struct ClientConnexion {
     pub width: u16,
     pub height: u16,
     pub pixel_format: PixelFormat,
+    pub available_security: Vec<SecurityType>,
     pub receive_screen_frame: sync::watch::Receiver<Frame>,
     pub mouse_pos_sender: sync::watch::Sender<Pos>,
     pub mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
     pub keyboard_sender: sync::mpsc::Sender<KeyEvent>,
-    pub auth_provider: Arc<FileAuthProvider>,
+    pub auth_provider: Arc<dyn AuthProvider>,
 }
 
 impl ClientConnexion {
@@ -44,8 +44,7 @@ impl ClientConnexion {
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
 
-        let available_security = vec![SecurityType::VNCAuthentication];
-        available_security.send(&mut stream).await?;
+        self.available_security.send(&mut stream).await?;
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");

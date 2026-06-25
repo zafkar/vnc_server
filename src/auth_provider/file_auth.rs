@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 use tokio::fs;
 
-use crate::auth_provider::UserPermissions;
+use crate::auth_provider::{AuthProvider, UserPermissions};
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct FileAuthProvider {
@@ -39,8 +39,10 @@ impl FileAuthProvider {
             users: users.to_vec(),
         }
     }
+}
 
-    pub fn get_passwords_permissions(&self) -> HashMap<String, UserPermissions> {
+impl AuthProvider for FileAuthProvider {
+    fn get_passwords_permissions(&self) -> HashMap<String, UserPermissions> {
         self.users.iter().fold(HashMap::new(), |mut acc, user| {
             acc.insert(user.password.clone(), user.permission);
             acc
