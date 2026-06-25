@@ -25,7 +25,7 @@ impl Frame {
             if end <= self.data.len() {
                 result.extend_from_slice(&self.data[start..end]);
             } else {
-                result.extend(std::iter::repeat(0).take(row_size));
+                result.extend(std::iter::repeat_n(0, row_size));
             }
 
             y_index += stride;
