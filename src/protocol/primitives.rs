@@ -88,7 +88,17 @@ impl SendInto for Color8888 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    FromPrimitive,
+    IntoPrimitive,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 #[repr(u8)]
 pub enum Flag {
     No = 0,

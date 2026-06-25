@@ -5,13 +5,23 @@ use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    auth_provider::{UserPermissions, file_auth::FileAuthProvider},
+    auth_provider::{AuthProvider, UserPermissions},
     protocol::{RecvFrom, SendInto},
 };
 
 mod vnc_authent;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    FromPrimitive,
+    IntoPrimitive,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 #[repr(u8)]
 pub enum SecurityType {
     #[default]
@@ -24,7 +34,7 @@ impl SecurityType {
     pub async fn check_password<S: AsyncWrite + AsyncRead + Unpin>(
         &self,
         stream: S,
-        provider: Arc<FileAuthProvider>,
+        provider: Arc<dyn AuthProvider>,
     ) -> Result<crate::auth_provider::SecurityResult> {
         match self {
             SecurityType::Invalid => Ok(crate::auth_provider::SecurityResult::Denied),

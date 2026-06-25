@@ -6,11 +6,11 @@ use rand::RngExt;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::debug;
 
-use crate::auth_provider::{SecurityResult, file_auth::FileAuthProvider};
+use crate::auth_provider::{AuthProvider, SecurityResult};
 
 pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     mut stream: S,
-    provider: Arc<FileAuthProvider>,
+    provider: Arc<dyn AuthProvider>,
 ) -> Result<SecurityResult> {
     let challenge: [u8; 16] = {
         let mut rng = rand::rng();
