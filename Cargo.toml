@@ -9,6 +9,7 @@ des = "0.9.0"
 enigo = { version = "0.6.1", features = ["tokio"] }
 flate2 = "1.1.9"
 num_enum = "0.7.6"
+pam-client = { version = "0.5.0", default-features = false , optional = true}
 rand = "0.10.1"
 rfb-encodings = { version = "0.1.7", optional = true}
 ron = "0.12.2"
@@ -17,10 +18,13 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uzers = {version = "0.12.2", optional = true}
 xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [features]
-default = []
+default = ["encoding_zrle", "encoding_tight", "auth_file", "auth_pam"]
 encoding_zrle = ["dep:rfb-encodings"]
 encoding_tight = ["dep:rfb-encodings"]
+auth_file = []
+auth_pam = ["dep:uzers", "dep:pam-client"]

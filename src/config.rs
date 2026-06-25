@@ -3,9 +3,15 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 
 use crate::{
-    auth_provider::{AuthProvider, file_auth::FileAuthProvider, none_provider::NoneAuthProvider},
+    auth_provider::{AuthProvider, none_provider::NoneAuthProvider},
     protocol::{handshake::security::SecurityType, pixel_format::PixelFormat},
 };
+
+#[cfg(feature = "auth_file")]
+use crate::auth_provider::file_auth::FileAuthProvider;
+
+#[cfg(feature = "auth_pam")]
+use crate::auth_provider::pam::{PAMAuthProvider, PAMAuthProviderConfig};
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
 pub struct Config {
@@ -19,13 +25,20 @@ pub struct Config {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum AuthProviderConfig {
+    #[cfg(feature = "auth_file")]
     File { path: String },
-    None { password: String },
+    None {
+        login: Option<String>,
+        password: String,
+    },
+    #[cfg(feature = "auth_pam")]
+    PAM(PAMAuthProviderConfig),
 }
 
 impl Default for AuthProviderConfig {
     fn default() -> Self {
         AuthProviderConfig::None {
+            login: Some("admin".to_string()),
             password: "password".to_string(),
         }
     }
@@ -34,10 +47,16 @@ impl Default for AuthProviderConfig {
 impl AuthProviderConfig {
     pub async fn init(&self) -> Result<Arc<dyn AuthProvider>> {
         match self {
+            #[cfg(feature = "auth_file")]
             AuthProviderConfig::File { path } => Ok(Arc::new(FileAuthProvider::load(path).await?)),
-            AuthProviderConfig::None { password } => Ok(Arc::new(NoneAuthProvider {
+            AuthProviderConfig::None { password, login } => Ok(Arc::new(NoneAuthProvider {
                 password: password.clone(),
+                login: login.clone(),
             })),
+            #[cfg(feature = "auth_pam")]
+            AuthProviderConfig::PAM(pamauth_provider_config) => Ok(Arc::new(
+                PAMAuthProvider::start(pamauth_provider_config.clone())?,
+            )),
         }
     }
 }
