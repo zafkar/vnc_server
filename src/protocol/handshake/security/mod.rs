@@ -1,8 +1,13 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::protocol::{RecvFrom, SendInto};
+use crate::{
+    auth_provider::{UserPermissions, file_auth::FileAuthProvider},
+    protocol::{RecvFrom, SendInto},
+};
 
 mod vnc_authent;
 
@@ -19,12 +24,17 @@ impl SecurityType {
     pub async fn check_password<S: AsyncWrite + AsyncRead + Unpin>(
         &self,
         stream: S,
-        password: &str,
-    ) -> Result<bool> {
+        provider: Arc<FileAuthProvider>,
+    ) -> Result<crate::auth_provider::SecurityResult> {
         match self {
-            SecurityType::Invalid => Ok(false),
-            SecurityType::None => Ok(true),
-            SecurityType::VNCAuthentication => vnc_authent::check(stream, password).await,
+            SecurityType::Invalid => Ok(crate::auth_provider::SecurityResult::Denied),
+            SecurityType::None => Ok(crate::auth_provider::SecurityResult::Authorized(
+                UserPermissions {
+                    view: true,
+                    control: true,
+                },
+            )),
+            SecurityType::VNCAuthentication => vnc_authent::check(stream, provider).await,
         }
     }
 }
@@ -45,14 +55,23 @@ impl RecvFrom for SecurityType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
 #[repr(u32)]
-pub enum SecurityResult {
+pub enum SecurityResultPacket {
     Ok = 0,
     #[default]
     Failed = 1,
 }
 
-impl SendInto for SecurityResult {
+impl SendInto for SecurityResultPacket {
     async fn send<S: AsyncWrite + Unpin>(&self, mut stream: S) -> Result<()> {
         Ok(stream.write_u32((*self).into()).await?)
+    }
+}
+
+impl From<crate::auth_provider::SecurityResult> for SecurityResultPacket {
+    fn from(value: crate::auth_provider::SecurityResult) -> Self {
+        match value {
+            crate::auth_provider::SecurityResult::Denied => SecurityResultPacket::Failed,
+            crate::auth_provider::SecurityResult::Authorized(..) => SecurityResultPacket::Ok,
+        }
     }
 }

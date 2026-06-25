@@ -11,7 +11,9 @@ flate2 = "1.1.9"
 num_enum = "0.7.6"
 rand = "0.10.1"
 rfb-encodings = { version = "0.1.7", optional = true}
+ron = "0.12.2"
 scrap = "0.5.0"
+serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
