@@ -1,6 +1,7 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
+    auth_provider::file_auth::FileAuthProvider,
     capture::Capturer,
     input_controller::{Controller, ControllerChannels},
     server::client_connexion::ClientConnexion,
@@ -57,6 +58,8 @@ impl VNCServer {
             }
         });
 
+        let auth_provider = Arc::new(FileAuthProvider::load("users.ron").await?);
+
         let listener = TcpListener::bind(self.bind_address.clone()).await?;
 
         while let Ok((stream, addr)) = listener.accept().await {
@@ -68,6 +71,7 @@ impl VNCServer {
                 mouse_buttons_sender: mouse_buttons_sender.clone(),
                 keyboard_sender: keyboard_sender.clone(),
                 pixel_format,
+                auth_provider: auth_provider.clone(),
             };
             spawn(async move {
                 match client.start(stream).await {

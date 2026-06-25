@@ -1,0 +1,13 @@
+(
+    users:[
+        (
+            login:Some("admin"),
+            password:"adm_password",
+            permission:(view:true,control:true)
+        ),
+        (
+            password:"password",
+            permission:(view:true)
+        )
+    ]
+)

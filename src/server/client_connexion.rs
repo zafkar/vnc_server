@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use crate::{
+    auth_provider::{SecurityResult, file_auth::FileAuthProvider},
     capture::Frame,
     input_controller::KeyEvent,
     protocol::{
@@ -7,7 +10,7 @@ use crate::{
         encodings::{Encoder, EncodingType, raw::RawEncoder},
         handshake::{
             init::{ClientInit, ServerInit},
-            security::{SecurityResult, SecurityType},
+            security::{SecurityResultPacket, SecurityType},
             version::Version,
             write_handshake_error,
         },
@@ -32,6 +35,7 @@ pub(super) struct ClientConnexion {
     pub mouse_pos_sender: sync::watch::Sender<Pos>,
     pub mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
     pub keyboard_sender: sync::mpsc::Sender<KeyEvent>,
+    pub auth_provider: Arc<FileAuthProvider>,
 }
 
 impl ClientConnexion {
@@ -40,30 +44,34 @@ impl ClientConnexion {
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
 
-        let available_security = vec![SecurityType::None];
+        let available_security = vec![SecurityType::VNCAuthentication];
         available_security.send(&mut stream).await?;
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");
-        match requested_security
-            .check_password(&mut stream, "password")
+        let user_permissions = match requested_security
+            .check_password(&mut stream, self.auth_provider.clone())
             .await
         {
-            Ok(true) => SecurityResult::Ok.send(&mut stream).await?,
-            Ok(false) => {
-                SecurityResult::Failed.send(&mut stream).await?;
+            Ok(SecurityResult::Authorized(user_permissions)) => {
+                SecurityResultPacket::Ok.send(&mut stream).await?;
+                user_permissions
+            }
+            Ok(SecurityResult::Denied) => {
+                SecurityResultPacket::Failed.send(&mut stream).await?;
                 write_handshake_error(&mut stream, "Wrong password").await?;
                 warn!("Client failed to authenticate");
                 return Ok(());
             }
             Err(err) => {
-                SecurityResult::Failed.send(&mut stream).await?;
+                SecurityResultPacket::Failed.send(&mut stream).await?;
                 write_handshake_error(&mut stream, &format!("Authentication failed : {err}"))
                     .await?;
                 error!("Authentication failed : {err}");
                 return Ok(());
             }
-        }
+        };
+        info!("Client connected with permissions {user_permissions:?}");
 
         let client_init = ClientInit::recv(&mut stream).await?;
         debug!("{client_init:?}");
@@ -104,6 +112,10 @@ impl ClientConnexion {
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
+                    if !user_permissions.view {
+                        debug!("Client forbidden from view");
+                        continue;
+                    }
                     if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
                         let data = self.receive_screen_frame.borrow().clone();
                         self.receive_screen_frame.mark_unchanged();
@@ -130,10 +142,18 @@ impl ClientConnexion {
                 }
                 ClientMessage::KeyEvent { pressed, key } => {
                     debug!("Client send key {pressed:?}, {key:?}");
+                    if !user_permissions.control {
+                        debug!("Client forbidden from control");
+                        continue;
+                    }
                     self.keyboard_sender.send((pressed, key)).await?;
                 }
                 ClientMessage::PointerEvent { buttons, pos } => {
                     debug!("Client send mouse {buttons:?}, {pos:?}");
+                    if !user_permissions.control {
+                        debug!("Client forbidden from control");
+                        continue;
+                    }
                     self.mouse_pos_sender.send_replace(pos);
 
                     if buttons != prev_mouse_buttons {
@@ -142,6 +162,10 @@ impl ClientConnexion {
                     }
                 }
                 ClientMessage::ClientCutText(text) => {
+                    if !user_permissions.control {
+                        debug!("Client forbidden from control");
+                        continue;
+                    }
                     debug!("Client send clipboard {text}");
                 }
             }
