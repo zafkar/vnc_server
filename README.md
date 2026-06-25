@@ -20,6 +20,13 @@ To build the project in release mode:
 cargo build --release
 ```
 
+### Dependencies
+
+| Feature  | Required librairies        | 
+|----------|----------------------------|
+| auth_pam | libclang-dev, libpam0g-dev |
+
+
 ## Run
 
 Run the server with:

@@ -6,7 +6,7 @@ use rand::RngExt;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::debug;
 
-use crate::auth_provider::{AuthProvider, SecurityResult};
+use crate::{auth_provider::AuthProvider, protocol::handshake::security::SecurityResult};
 
 pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     mut stream: S,
@@ -24,12 +24,12 @@ pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     let mut client_challenge = [0u8; 16];
     stream.read_exact(&mut client_challenge).await?;
 
-    for (password, permissions) in provider.get_passwords_permissions() {
+    for (password, permissions) in provider.get_passwords_permissions()? {
         if encrypt_challenge(challenge, &password)? == client_challenge {
             return Ok(SecurityResult::Authorized(permissions));
         }
     }
-    Ok(SecurityResult::Denied)
+    Ok(SecurityResult::Denied("Wrong password".to_string()))
 }
 
 fn encrypt_8b(des_crypter: &des::Des, block: &[u8]) -> Result<Vec<u8>> {

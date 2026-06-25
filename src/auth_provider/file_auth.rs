@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use anyhow::Result;
 use tokio::fs;
 
-use crate::auth_provider::{AuthProvider, UserPermissions};
+use crate::{
+    auth_provider::{AuthProvider, UserPermissions},
+    protocol::handshake::security::SecurityResult,
+};
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct FileAuthProvider {
@@ -42,10 +45,20 @@ impl FileAuthProvider {
 }
 
 impl AuthProvider for FileAuthProvider {
-    fn get_passwords_permissions(&self) -> HashMap<String, UserPermissions> {
-        self.users.iter().fold(HashMap::new(), |mut acc, user| {
+    fn get_passwords_permissions(&self) -> Result<HashMap<String, UserPermissions>> {
+        Ok(self.users.iter().fold(HashMap::new(), |mut acc, user| {
             acc.insert(user.password.clone(), user.permission);
             acc
-        })
+        }))
+    }
+
+    fn verify_user(&mut self, login: &str, password: &str) -> Result<SecurityResult> {
+        for user in self.users.iter() {
+            if user.login == Some(login.to_string()) && user.password == password {
+                return Ok(SecurityResult::Authorized(user.permission));
+            }
+        }
+
+        Ok(SecurityResult::Denied("Wrong password".to_string()))
     }
 }

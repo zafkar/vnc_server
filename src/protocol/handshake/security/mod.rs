@@ -6,7 +6,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::{
     auth_provider::{AuthProvider, UserPermissions},
-    protocol::{RecvFrom, SendInto},
+    protocol::{RecvFrom, SendInto, handshake::write_handshake_error},
 };
 
 mod vnc_authent;
@@ -35,15 +35,15 @@ impl SecurityType {
         &self,
         stream: S,
         provider: Arc<dyn AuthProvider>,
-    ) -> Result<crate::auth_provider::SecurityResult> {
+    ) -> Result<SecurityResult> {
         match self {
-            SecurityType::Invalid => Ok(crate::auth_provider::SecurityResult::Denied),
-            SecurityType::None => Ok(crate::auth_provider::SecurityResult::Authorized(
-                UserPermissions {
-                    view: true,
-                    control: true,
-                },
+            SecurityType::Invalid => Ok(SecurityResult::Denied(
+                "Invalid or unknown Authentication Type".to_string(),
             )),
+            SecurityType::None => Ok(SecurityResult::Authorized(UserPermissions {
+                view: true,
+                control: true,
+            })),
             SecurityType::VNCAuthentication => vnc_authent::check(stream, provider).await,
         }
     }
@@ -63,25 +63,48 @@ impl RecvFrom for SecurityType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
-#[repr(u32)]
-pub enum SecurityResultPacket {
-    Ok = 0,
-    #[default]
-    Failed = 1,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecurityResult {
+    Denied(String),
+    Authorized(UserPermissions),
 }
 
-impl SendInto for SecurityResultPacket {
-    async fn send<S: AsyncWrite + Unpin>(&self, mut stream: S) -> Result<()> {
-        Ok(stream.write_u32((*self).into()).await?)
+impl SecurityResult {
+    pub fn get_value(&self) -> u32 {
+        match self {
+            SecurityResult::Denied(..) => 1,
+            SecurityResult::Authorized(..) => 0,
+        }
+    }
+
+    pub fn is_denied(&self) -> bool {
+        if let Self::Denied(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn get_permissions(&self) -> UserPermissions {
+        match self {
+            SecurityResult::Denied(_) => UserPermissions::empty(),
+            SecurityResult::Authorized(user_permissions) => *user_permissions,
+        }
     }
 }
 
-impl From<crate::auth_provider::SecurityResult> for SecurityResultPacket {
-    fn from(value: crate::auth_provider::SecurityResult) -> Self {
-        match value {
-            crate::auth_provider::SecurityResult::Denied => SecurityResultPacket::Failed,
-            crate::auth_provider::SecurityResult::Authorized(..) => SecurityResultPacket::Ok,
+impl SendInto for SecurityResult {
+    async fn send<S: AsyncWrite + Unpin>(&self, mut stream: S) -> Result<()> {
+        stream.write_u32(self.get_value()).await?;
+        if let Self::Denied(msg) = self {
+            write_handshake_error(&mut stream, msg).await?;
         }
+        Ok(())
+    }
+}
+
+impl From<anyhow::Error> for SecurityResult {
+    fn from(value: anyhow::Error) -> Self {
+        SecurityResult::Denied(format!("Authentication Denied : {value}"))
     }
 }

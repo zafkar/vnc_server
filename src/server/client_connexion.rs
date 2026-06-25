@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    auth_provider::{AuthProvider, SecurityResult},
+    auth_provider::AuthProvider,
     capture::Frame,
     input_controller::KeyEvent,
     protocol::{
@@ -10,9 +10,8 @@ use crate::{
         encodings::{Encoder, EncodingType, raw::RawEncoder},
         handshake::{
             init::{ClientInit, ServerInit},
-            security::{SecurityResultPacket, SecurityType},
+            security::SecurityType,
             version::Version,
-            write_handshake_error,
         },
         pixel_format::PixelFormat,
         primitives::{Flag, Pos},
@@ -24,7 +23,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 pub(super) struct ClientConnexion {
     pub width: u16,
@@ -48,28 +47,34 @@ impl ClientConnexion {
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");
-        let user_permissions = match requested_security
-            .check_password(&mut stream, self.auth_provider.clone())
-            .await
-        {
-            Ok(SecurityResult::Authorized(user_permissions)) => {
-                SecurityResultPacket::Ok.send(&mut stream).await?;
-                user_permissions
-            }
-            Ok(SecurityResult::Denied) => {
-                SecurityResultPacket::Failed.send(&mut stream).await?;
-                write_handshake_error(&mut stream, "Wrong password").await?;
-                warn!("Client failed to authenticate");
-                return Ok(());
-            }
-            Err(err) => {
-                SecurityResultPacket::Failed.send(&mut stream).await?;
-                write_handshake_error(&mut stream, &format!("Authentication failed : {err}"))
-                    .await?;
-                error!("Authentication failed : {err}");
-                return Ok(());
-            }
+
+        let user_permissions = {
+            let security_result = requested_security
+                .check_password(&mut stream, self.auth_provider.clone())
+                .await?;
+
+            security_result.send(&mut stream).await?;
+            security_result.get_permissions()
         };
+        // {
+        //     Ok(SecurityResult::Authorized(user_permissions)) => {
+        //         SecurityResultPacket::Ok.send(&mut stream).await?;
+        //         user_permissions
+        //     }
+        //     Ok(SecurityResult::Denied) => {
+        //         SecurityResultPacket::Failed.send(&mut stream).await?;
+        //         write_handshake_error(&mut stream, "Wrong password").await?;
+        //         warn!("Client failed to authenticate");
+        //         return Ok(());
+        //     }
+        //     Err(err) => {
+        //         SecurityResultPacket::Failed.send(&mut stream).await?;
+        //         write_handshake_error(&mut stream, &format!("Authentication failed : {err}"))
+        //             .await?;
+        //         error!("Authentication failed : {err}");
+        //         return Ok(());
+        //     }
+        // };
         info!("Client connected with permissions {user_permissions:?}");
 
         let client_init = ClientInit::recv(&mut stream).await?;
