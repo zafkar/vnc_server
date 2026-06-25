@@ -25,7 +25,7 @@ pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     stream.read_exact(&mut client_challenge).await?;
 
     for (password, permissions) in provider.get_passwords_permissions() {
-        if encrypt_challenge(challenge.clone(), &password)? == client_challenge {
+        if encrypt_challenge(challenge, &password)? == client_challenge {
             return Ok(SecurityResult::Authorized(permissions));
         }
     }
