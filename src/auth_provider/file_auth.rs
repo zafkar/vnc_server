@@ -52,7 +52,7 @@ impl AuthProvider for FileAuthProvider {
         }))
     }
 
-    fn verify_user(&mut self, login: &str, password: &str) -> Result<SecurityResult> {
+    fn verify_user(&self, login: &str, password: &str) -> Result<SecurityResult> {
         for user in self.users.iter() {
             if user.login == Some(login.to_string()) && user.password == password {
                 return Ok(SecurityResult::Authorized(user.permission));

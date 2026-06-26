@@ -18,7 +18,7 @@ use crate::{
         server_msg::ServerMessage,
     },
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync,
@@ -54,6 +54,9 @@ impl ClientConnexion {
                 .await?;
 
             security_result.send(&mut stream).await?;
+            if security_result.is_denied() {
+                return Err(anyhow!("Authentication denied"));
+            }
             security_result.get_permissions()
         };
         // {

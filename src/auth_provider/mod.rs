@@ -4,10 +4,10 @@ use anyhow::Result;
 
 use crate::protocol::handshake::security::SecurityResult;
 
-#[cfg(feature = "auth_file")]
+#[cfg(feature = "auth_provider_file")]
 pub mod file_auth;
 pub mod none_provider;
-#[cfg(feature = "auth_pam")]
+#[cfg(feature = "auth_provider_pam")]
 pub mod pam;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
@@ -46,5 +46,5 @@ impl UserPermissions {
 
 pub trait AuthProvider: Send + Sync {
     fn get_passwords_permissions(&self) -> Result<HashMap<String, UserPermissions>>;
-    fn verify_user(&mut self, login: &str, password: &str) -> Result<SecurityResult>;
+    fn verify_user(&self, login: &str, password: &str) -> Result<SecurityResult>;
 }
