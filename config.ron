@@ -1,17 +1,39 @@
 (
+    // Network and protocol configuration
     server:(
+        // Adress the server will listen on
         bind_address:"0.0.0.0:5900",
+        // Size of the channel in message number used to communicate between thread
         channel_size:128,
+        // Auth protocol the client is allowed to use to connect
+        // Valid values are :
+        // - None
+        // - VNCAuthentication
+        // - MSLogonII
         auth_protocols:[MSLogonII]
     ),
+    // Screen Capture module configuration 
     capture:(
         time_between_frame:(secs:0,nanos:15000000)
     ),
+    // Auth Provider module configuration
+    // The available provider module are :
+    // - None : The simplest provider, only takes a password and an optional login, this user has all available rights
+    // - File : Gather the users from a file, see users.ron for the format
+    // - PAM : Only available on Linux, asks PAM, rights are defined by the user groups
+    // Uncomment which ever provider you want
+    
+    // None Provider, please change the password before use
+    auth_provider:r#None(login: Some("admin"), password:"password")
+    
+    // File Provider
     // auth_provider:r#File(path:"users.ron")
-    auth_provider:r#PAM((
-        service:"login",
-        control_group_name:"adm",
-        view_group_name:"users"
-        )
-    )
+
+    //PAM
+    // auth_provider:r#PAM((
+    //     service:"login",
+    //     control_group_name:"adm",
+    //     view_group_name:"users"
+    //     )
+    // )
 )
