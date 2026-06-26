@@ -3,7 +3,10 @@ use des::cipher::{BlockCipherDecrypt, KeyInit, consts::U8};
 use num_prime::nt_funcs::is_prime;
 use rand::RngExt;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    task::spawn_blocking,
+};
 
 use crate::{auth_provider::AuthProvider, protocol::handshake::security::SecurityResult};
 
@@ -49,7 +52,9 @@ pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     let password = u8_null_to_string(&password_crypted)?;
     dbg!(&password);
 
-    provider.verify_user(&username, &password)
+    let handle = spawn_blocking(move || provider.verify_user(&username, &password));
+
+    handle.await?
 }
 
 fn u8_null_to_string(data: &[u8]) -> Result<String> {

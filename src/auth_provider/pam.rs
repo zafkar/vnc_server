@@ -15,10 +15,15 @@ pub struct PAMAuthProvider {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct PAMAuthProviderConfig {
+    #[serde(default = "default_channel_size")]
     channel_size: usize,
     service: String,
     control_group_name: String,
     view_group_name: String,
+}
+
+fn default_channel_size() -> usize {
+    128
 }
 
 impl PAMAuthProvider {

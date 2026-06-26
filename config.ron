@@ -7,5 +7,11 @@
     capture:(
         time_between_frame:(secs:0,nanos:15000000)
     ),
-    auth_provider:r#File(path:"users.ron")
+    // auth_provider:r#File(path:"users.ron")
+    auth_provider:r#PAM((
+        service:"login",
+        control_group_name:"adm",
+        view_group_name:"users"
+        )
+    )
 )
