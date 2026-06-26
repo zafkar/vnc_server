@@ -7,10 +7,10 @@ use crate::{
     protocol::{handshake::security::SecurityType, pixel_format::PixelFormat},
 };
 
-#[cfg(feature = "auth_file")]
+#[cfg(feature = "auth_provider_file")]
 use crate::auth_provider::file_auth::FileAuthProvider;
 
-#[cfg(feature = "auth_pam")]
+#[cfg(feature = "auth_provider_pam")]
 use crate::auth_provider::pam::{PAMAuthProvider, PAMAuthProviderConfig};
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
@@ -25,13 +25,13 @@ pub struct Config {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub enum AuthProviderConfig {
-    #[cfg(feature = "auth_file")]
+    #[cfg(feature = "auth_provider_file")]
     File { path: String },
     None {
         login: Option<String>,
         password: String,
     },
-    #[cfg(feature = "auth_pam")]
+    #[cfg(feature = "auth_provider_pam")]
     PAM(PAMAuthProviderConfig),
 }
 
@@ -47,13 +47,13 @@ impl Default for AuthProviderConfig {
 impl AuthProviderConfig {
     pub async fn init(&self) -> Result<Arc<dyn AuthProvider>> {
         match self {
-            #[cfg(feature = "auth_file")]
+            #[cfg(feature = "auth_provider_file")]
             AuthProviderConfig::File { path } => Ok(Arc::new(FileAuthProvider::load(path).await?)),
             AuthProviderConfig::None { password, login } => Ok(Arc::new(NoneAuthProvider {
                 password: password.clone(),
                 login: login.clone(),
             })),
-            #[cfg(feature = "auth_pam")]
+            #[cfg(feature = "auth_provider_pam")]
             AuthProviderConfig::PAM(pamauth_provider_config) => Ok(Arc::new(
                 PAMAuthProvider::start(pamauth_provider_config.clone())?,
             )),

@@ -118,11 +118,7 @@ impl AuthProvider for PAMAuthProvider {
         ))
     }
 
-    fn verify_user(
-        &mut self,
-        login: &str,
-        password: &str,
-    ) -> anyhow::Result<super::SecurityResult> {
+    fn verify_user(&self, login: &str, password: &str) -> anyhow::Result<super::SecurityResult> {
         let (reply_sender, reply_receiver) = sync::oneshot::channel();
 
         self.sender.blocking_send(PAMThreadRequest {

@@ -2,7 +2,7 @@
     server:(
         bind_address:"0.0.0.0:5900",
         channel_size:128,
-        auth_protocols:[VNCAuthentication]
+        auth_protocols:[MSLogonII]
     ),
     capture:(
         time_between_frame:(secs:0,nanos:15000000)

@@ -24,11 +24,7 @@ impl AuthProvider for NoneAuthProvider {
         Ok(users)
     }
 
-    fn verify_user(
-        &mut self,
-        login: &str,
-        password: &str,
-    ) -> anyhow::Result<super::SecurityResult> {
+    fn verify_user(&self, login: &str, password: &str) -> anyhow::Result<super::SecurityResult> {
         if let Some(own_login) = &self.login
             && own_login == login
             && password == self.password

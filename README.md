@@ -24,7 +24,7 @@ cargo build --release
 
 | Feature  | Required librairies        | 
 |----------|----------------------------|
-| auth_pam | libclang-dev, libpam0g-dev |
+| auth_provider_pam | libclang-dev, libpam0g-dev |
 
 
 ## Run

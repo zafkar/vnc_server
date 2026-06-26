@@ -5,11 +5,14 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.102"
+crypto-bigint = "0.7.5"
 des = "0.9.0"
 enigo = { version = "0.6.1", features = ["tokio"] }
 flate2 = "1.1.9"
+num-prime = "0.5.0"
 num_enum = "0.7.6"
 pam-client = { version = "0.5.0", default-features = false , optional = true}
+purecrypto = { version = "0.6.25", default-features = false, features = ["dh", "std"], optional = true }
 rand = "0.10.1"
 rfb-encodings = { version = "0.1.7", optional = true}
 ron = "0.12.2"
@@ -23,8 +26,9 @@ xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [features]
-default = ["encoding_zrle", "encoding_tight", "auth_file", "auth_pam"]
+default = ["encoding_zrle", "encoding_tight", "auth_provider_file", "auth_provider_pam", "auth_method_mslogonii"]
 encoding_zrle = ["dep:rfb-encodings"]
 encoding_tight = ["dep:rfb-encodings"]
-auth_file = []
-auth_pam = ["dep:uzers", "dep:pam-client"]
+auth_provider_file = []
+auth_provider_pam = ["dep:uzers", "dep:pam-client"]
+auth_method_mslogonii = ["dep:purecrypto"]

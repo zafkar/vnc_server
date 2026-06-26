@@ -11,6 +11,9 @@ use crate::{
 
 mod vnc_authent;
 
+#[cfg(feature = "auth_method_mslogonii")]
+mod mslogonii;
+
 #[derive(
     Debug,
     Clone,
@@ -28,6 +31,8 @@ pub enum SecurityType {
     Invalid = 0,
     None = 1,
     VNCAuthentication = 2,
+    #[cfg(feature = "auth_method_mslogonii")]
+    MSLogonII = 113,
 }
 
 impl SecurityType {
@@ -45,6 +50,8 @@ impl SecurityType {
                 control: true,
             })),
             SecurityType::VNCAuthentication => vnc_authent::check(stream, provider).await,
+            #[cfg(feature = "auth_method_mslogonii")]
+            SecurityType::MSLogonII => mslogonii::check(stream, provider).await,
         }
     }
 }
