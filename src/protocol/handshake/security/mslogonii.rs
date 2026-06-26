@@ -7,6 +7,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     task::spawn_blocking,
 };
+use tracing::warn;
 
 use crate::{auth_provider::AuthProvider, protocol::handshake::security::SecurityResult};
 
@@ -16,6 +17,7 @@ pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
     mut stream: S,
     provider: Arc<dyn AuthProvider>,
 ) -> Result<SecurityResult> {
+    warn!("MSLogonII is not cryptographically secure.");
     let mut g = generate_prime();
     let mut modulus = generate_prime();
 
