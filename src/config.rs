@@ -21,6 +21,9 @@ pub struct Config {
     pub capture: CaptureConfig,
     #[serde(default)]
     pub auth_provider: AuthProviderConfig,
+    #[cfg(feature = "management")]
+    #[serde(default)]
+    pub management: Option<ManagmentServerConfig>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -96,6 +99,26 @@ impl Default for CaptureConfig {
             time_between_frame: Duration::from_millis(15),
         }
     }
+}
+
+#[cfg(feature = "management")]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct ManagmentServerConfig {
+    #[serde(default = "default_mgmt_bind_address")]
+    pub bind_address: String,
+}
+
+#[cfg(feature = "management")]
+impl Default for ManagmentServerConfig {
+    fn default() -> Self {
+        Self {
+            bind_address: default_mgmt_bind_address(),
+        }
+    }
+}
+
+fn default_mgmt_bind_address() -> String {
+    "127.0.0.1:5899".to_string()
 }
 
 fn default_bind_address() -> String {

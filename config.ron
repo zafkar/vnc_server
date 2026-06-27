@@ -24,10 +24,10 @@
     // Uncomment which ever provider you want
     
     // None Provider, please change the password before use
-    auth_provider:r#None(login: Some("admin"), password:"password")
+    auth_provider:r#None(login: Some("admin"), password:"password"),
     
     // File Provider
-    // auth_provider:r#File(path:"users.ron")
+    // auth_provider:r#File(path:"users.ron"),
 
     //PAM
     // auth_provider:r#PAM((
@@ -35,5 +35,7 @@
     //     control_group_name:"adm",
     //     view_group_name:"users"
     //     )
-    // )
+    // ),
+
+    management:Some(()),
 )

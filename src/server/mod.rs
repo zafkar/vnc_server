@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use crate::{
     capture::Capturer,
     config::Config,
     input_controller::{Controller, ControllerChannels},
+    mgmt_server::{Client, ManagmentServer},
     server::client_connexion::ClientConnexion,
 };
 use anyhow::Result;
-use tokio::{net::TcpListener, spawn, task::spawn_blocking};
+use tokio::{net::TcpListener, spawn, sync, task::spawn_blocking};
 use tracing::{error, info, warn};
 
 mod client_connexion;
@@ -53,10 +56,24 @@ impl VNCServer {
 
         let auth_provider = self.config.auth_provider.init().await?;
 
+        let (client_updater, client_watcher) = sync::watch::channel(HashMap::new());
+
+        let mgmt_config = self.config.management.clone();
+        spawn(async {
+            if let Some(mgmt_config) = mgmt_config {
+                let mut management_server =
+                    ManagmentServer::new(mgmt_config.clone(), client_watcher);
+                match management_server.start().await {
+                    Ok(_) => warn!("Management server stopped"),
+                    Err(err) => error!("Management server crashed : {err}"),
+                }
+            }
+        });
+
         let listener = TcpListener::bind(self.config.server.bind_address.clone()).await?;
 
         while let Ok((stream, addr)) = listener.accept().await {
-            let mut client = ClientConnexion {
+            let mut client_connexion = ClientConnexion {
                 width: width as u16,
                 height: height as u16,
                 receive_screen_frame: receive_screen_frame.clone(),
@@ -67,11 +84,15 @@ impl VNCServer {
                 auth_provider: auth_provider.clone(),
                 available_security: self.config.server.auth_protocols.clone(),
             };
-            spawn(async move {
-                match client.start(stream).await {
+            let handle = spawn(async move {
+                match client_connexion.start(stream).await {
                     Ok(_) => info!("Client {addr:?} disconnected"),
                     Err(err) => warn!("Client thread for {addr:?} failed : {err}"),
                 }
+            });
+            let client = Client::new(addr, handle.abort_handle());
+            client_updater.send_modify(|clients| {
+                clients.insert(client.uuid.clone(), client);
             });
         }
 

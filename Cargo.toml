@@ -20,14 +20,16 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.3", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.23.4", features = ["serde", "v7"] }
 uzers = {version = "0.12.2", optional = true}
 xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 
 [features]
-default = ["encoding_zrle", "encoding_tight", "auth_provider_file", "auth_provider_pam", "auth_method_mslogonii"]
+default = ["management", "encoding_zrle", "encoding_tight", "auth_provider_file", "auth_provider_pam", "auth_method_mslogonii"]
 encoding_zrle = ["dep:rfb-encodings"]
 encoding_tight = ["dep:rfb-encodings"]
 auth_provider_file = []
 auth_provider_pam = ["dep:uzers", "dep:pam-client"]
 auth_method_mslogonii = ["dep:num-prime"]
+management = []
