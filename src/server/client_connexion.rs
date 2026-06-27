@@ -15,14 +15,12 @@ use crate::{
         },
         pixel_format::PixelFormat,
         primitives::{Flag, Pos},
+        pseudo_encodings::cursor_alpha::AlphaCursorPseudoEncodings,
         server_msg::ServerMessage,
     },
 };
 use anyhow::{Result, anyhow};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync,
-};
+use tokio::{net::TcpStream, spawn, sync};
 use tracing::{debug, info};
 
 pub(super) struct ClientConnexion {
@@ -38,7 +36,7 @@ pub(super) struct ClientConnexion {
 }
 
 impl ClientConnexion {
-    pub async fn start<S: AsyncRead + AsyncWrite + Unpin>(&mut self, mut stream: S) -> Result<()> {
+    pub async fn start(&mut self, mut stream: TcpStream) -> Result<()> {
         Version::default().send(&mut stream).await?;
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
@@ -59,25 +57,6 @@ impl ClientConnexion {
             }
             security_result.get_permissions()
         };
-        // {
-        //     Ok(SecurityResult::Authorized(user_permissions)) => {
-        //         SecurityResultPacket::Ok.send(&mut stream).await?;
-        //         user_permissions
-        //     }
-        //     Ok(SecurityResult::Denied) => {
-        //         SecurityResultPacket::Failed.send(&mut stream).await?;
-        //         write_handshake_error(&mut stream, "Wrong password").await?;
-        //         warn!("Client failed to authenticate");
-        //         return Ok(());
-        //     }
-        //     Err(err) => {
-        //         SecurityResultPacket::Failed.send(&mut stream).await?;
-        //         write_handshake_error(&mut stream, &format!("Authentication failed : {err}"))
-        //             .await?;
-        //         error!("Authentication failed : {err}");
-        //         return Ok(());
-        //     }
-        // };
         info!("Client connected with permissions {user_permissions:?}");
 
         let client_init = ClientInit::recv(&mut stream).await?;
@@ -92,20 +71,31 @@ impl ClientConnexion {
         .send(&mut stream)
         .await?;
 
+        let (mut read_stream, mut write_stream) = stream.into_split();
+        let (sender_to_client, mut receiver_to_client) = sync::mpsc::channel::<ServerMessage>(128);
+        spawn(async move {
+            while let Some(message) = receiver_to_client.recv().await {
+                message.send(&mut write_stream).await?;
+            }
+
+            Ok::<_, anyhow::Error>(())
+        });
+
         let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
         let mut prev_mouse_buttons = MouseButtonMask::default();
         let mut target_pixel_format = None;
 
-        while let Ok(client_msg) = ClientMessage::recv(&mut stream).await {
+        while let Ok(client_msg) = ClientMessage::recv(&mut read_stream).await {
             match client_msg {
                 ClientMessage::SetPixelFormat(pixel_format) => {
                     info!("Client asks for {pixel_format:?}");
                     target_pixel_format = Some(pixel_format);
                     info!("Reinitializing encoder");
-                    encoder =
-                        encoder
-                            .encoding_type()
-                            .init_encoder(self.width, self.height, pixel_format);
+                    encoder = encoder.encoding_type().init_encoder(
+                        self.width,
+                        self.height,
+                        pixel_format,
+                    )?;
                 }
                 ClientMessage::SetEncodings(items) => {
                     info!("Client propose {items:?} as encodings");
@@ -115,7 +105,12 @@ impl ClientConnexion {
                         self.width,
                         self.height,
                         target_pixel_format.unwrap_or(self.pixel_format),
-                    );
+                    )?;
+                    if items.contains(&EncodingType::CursorWithAlpha) {
+                        sender_to_client
+                            .send(AlphaCursorPseudoEncodings.get_message()?)
+                            .await?;
+                    }
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
@@ -136,14 +131,14 @@ impl ClientConnexion {
                             )?,
                             None => data.get_src_rect(rect, self.height as usize),
                         };
-                        ServerMessage::FramebufferUpdate(
-                            encoder.encode(rect, &dest_pixel_format_data)?,
-                        )
-                        .send(&mut stream)
-                        .await?;
+                        sender_to_client
+                            .send(ServerMessage::FramebufferUpdate(
+                                encoder.encode(rect, &dest_pixel_format_data)?,
+                            ))
+                            .await?;
                     } else {
-                        ServerMessage::FramebufferUpdate(vec![])
-                            .send(&mut stream)
+                        sender_to_client
+                            .send(ServerMessage::FramebufferUpdate(vec![]))
                             .await?;
                     }
                 }

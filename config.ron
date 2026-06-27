@@ -10,7 +10,7 @@
         // - None
         // - VNCAuthentication
         // - MSLogonII
-        auth_protocols:[MSLogonII]
+        auth_protocols:[None]
     ),
     // Screen Capture module configuration 
     capture:(

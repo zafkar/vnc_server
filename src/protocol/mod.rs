@@ -6,6 +6,7 @@ pub mod encodings;
 pub mod handshake;
 pub mod pixel_format;
 pub mod primitives;
+pub mod pseudo_encodings;
 pub mod server_msg;
 
 #[cfg(test)]

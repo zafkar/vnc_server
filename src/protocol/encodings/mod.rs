@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tracing::warn;
@@ -36,6 +36,7 @@ pub enum EncodingType {
     // JPEG = 21,
     // OpenH264 = 50,
     // TightPNG = -260,
+    CursorWithAlpha = -314,
 }
 
 impl EncodingType {
@@ -48,28 +49,29 @@ impl EncodingType {
         #[allow(unused)] width: u16,
         #[allow(unused)] height: u16,
         #[allow(unused)] pixel_format: PixelFormat,
-    ) -> Box<dyn Encoder> {
+    ) -> Result<Box<dyn Encoder>> {
         match self {
-            EncodingType::Raw => Box::new(RawEncoder),
+            EncodingType::Raw => Ok(Box::new(RawEncoder)),
             #[cfg(feature = "encoding_zrle")]
-            EncodingType::ZRLE => Box::new(ZRLEEncoder {
+            EncodingType::ZRLE => Ok(Box::new(ZRLEEncoder {
                 width,
                 height,
                 compressor: Compress::new(Compression::fast(), true),
                 pixel_format: pixel_format.into(),
-            }),
+            })),
             #[cfg(feature = "encoding_tight")]
             EncodingType::Tight => {
                 let compression_level = 6;
-                Box::new(crate::protocol::encodings::tight::TightEncoder {
+                Ok(Box::new(crate::protocol::encodings::tight::TightEncoder {
                     width,
                     height,
                     compressor: rfb_encodings::tight::SimpleTightCompressor::new(compression_level),
                     pixel_format: pixel_format.into(),
                     quality: 6,
                     compression_level,
-                })
+                }))
             }
+            _ => Err(anyhow!("Not an encoding")),
         }
     }
 

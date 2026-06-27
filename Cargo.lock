@@ -763,6 +763,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "png"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
+dependencies = [
+ "bitflags 2.13.0",
+ "crc32fast",
+ "fdeflate",
+ "flate2",
+ "miniz_oxide",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -903,7 +916,7 @@ checksum = "8256cc2cc1352ecdad7954cf053ae8c619067fe36b32ca4f3095a9079eaab0c0"
 dependencies = [
  "bytes",
  "flate2",
- "png",
+ "png 0.17.16",
 ]
 
 [[package]]
@@ -1241,6 +1254,7 @@ dependencies = [
  "num-prime",
  "num_enum",
  "pam-client",
+ "png 0.18.1",
  "rand 0.10.1",
  "rfb-encodings",
  "ron",
