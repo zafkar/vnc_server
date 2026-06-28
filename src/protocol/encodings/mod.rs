@@ -18,7 +18,7 @@ use crate::protocol::encodings::zrle::ZRLEEncoder;
 #[cfg(feature = "encoding_zrle")]
 use flate2::{Compress, Compression};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, IntoPrimitive, serde::Serialize)]
 #[repr(i32)]
 pub enum EncodingType {
     #[default]

@@ -4,6 +4,7 @@ use crate::{
     auth_provider::AuthProvider,
     capture::Frame,
     input_controller::KeyEvent,
+    mgmt_server::{ClientInfo, ClientStatus},
     protocol::{
         RecvFrom, SendInto,
         client_msg::{ClientMessage, MouseButtonMask},
@@ -33,6 +34,7 @@ pub(super) struct ClientConnexion {
     pub mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
     pub keyboard_sender: sync::mpsc::Sender<KeyEvent>,
     pub auth_provider: Arc<dyn AuthProvider>,
+    pub info: sync::watch::Sender<ClientInfo>,
 }
 
 impl ClientConnexion {
@@ -45,6 +47,8 @@ impl ClientConnexion {
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");
+        self.info
+            .send_modify(|info| info.auth_type = Some(requested_security));
 
         let user_permissions = {
             let security_result = requested_security
@@ -58,6 +62,10 @@ impl ClientConnexion {
             security_result.get_permissions()
         };
         info!("Client connected with permissions {user_permissions:?}");
+        self.info.send_modify(|info| {
+            info.permissions = Some(user_permissions);
+            info.status = ClientStatus::Authorized;
+        });
 
         let client_init = ClientInit::recv(&mut stream).await?;
         debug!("{client_init:?}");
@@ -70,6 +78,10 @@ impl ClientConnexion {
         }
         .send(&mut stream)
         .await?;
+        self.info.send_modify(|info| {
+            info.pixel_format = Some(self.pixel_format);
+            info.status = ClientStatus::Initialized;
+        });
 
         let (mut read_stream, mut write_stream) = stream.into_split();
         let (sender_to_client, mut receiver_to_client) = sync::mpsc::channel::<ServerMessage>(128);
@@ -84,6 +96,9 @@ impl ClientConnexion {
         let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
         let mut prev_mouse_buttons = MouseButtonMask::default();
         let mut target_pixel_format = None;
+        self.info.send_modify(|info| {
+            info.status = ClientStatus::Running;
+        });
 
         while let Ok(client_msg) = ClientMessage::recv(&mut read_stream).await {
             match client_msg {
@@ -96,6 +111,9 @@ impl ClientConnexion {
                         self.height,
                         pixel_format,
                     )?;
+                    self.info.send_modify(|info| {
+                        info.pixel_format = Some(pixel_format);
+                    });
                 }
                 ClientMessage::SetEncodings(items) => {
                     info!("Client propose {items:?} as encodings");
@@ -111,6 +129,9 @@ impl ClientConnexion {
                             .send(AlphaCursorPseudoEncodings.get_message()?)
                             .await?;
                     }
+                    self.info.send_modify(|info| {
+                        info.encoding = Some(encoding_type);
+                    });
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
                     debug!("Client asks for {rect:?}, incremental {incremental:?}");
@@ -172,6 +193,10 @@ impl ClientConnexion {
                 }
             }
         }
+
+        self.info.send_modify(|info| {
+            info.status = ClientStatus::Dead;
+        });
 
         Ok(())
     }

@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use tokio::io::AsyncReadExt;
 use tracing::debug;
 use xkeysym::Keysym;
@@ -65,7 +66,7 @@ impl RecvFrom for ClientMessage {
                 //Todo: decode with ISO 8859-1 (Latin-1) instead
                 Self::ClientCutText(String::from_utf8_lossy(&text).to_string())
             }
-            msg => unimplemented!("Client message {msg}"),
+            msg => return Err(anyhow!("Unimplemented : Client message {msg}")),
         };
 
         Ok(msg)
