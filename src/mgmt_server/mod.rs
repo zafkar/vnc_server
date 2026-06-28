@@ -2,11 +2,11 @@ use anyhow::Result;
 use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::{TcpListener, TcpStream},
+    net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
     spawn, sync,
     task::AbortHandle,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::config::ManagmentServerConfig;
@@ -42,6 +42,15 @@ enum ManagmentClientMessage {
     ListClient,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+struct ManagementClientError(String);
+
+impl From<anyhow::Error> for ManagementClientError {
+    fn from(value: anyhow::Error) -> Self {
+        ManagementClientError(value.to_string())
+    }
+}
+
 async fn handle_client(client_stream: TcpStream, clients: ClientsHandle) -> Result<()> {
     let (read_stream, mut write_stream) = client_stream.into_split();
 
@@ -51,14 +60,30 @@ async fn handle_client(client_stream: TcpStream, clients: ClientsHandle) -> Resu
     while let Ok(read_len) = reader.read_line(&mut from_client_buffer).await
         && read_len != 0
     {
-        let client_message = ron::from_str::<ManagmentClientMessage>(&from_client_buffer)?;
-        debug!("Management received from client : {client_message:?}");
-
-        match client_message {
-            ManagmentClientMessage::ListClient => {
-                let ron_text = ron::to_string(&clients.borrow().values().collect::<Vec<_>>())?;
+        match process_request(&from_client_buffer, &mut write_stream, &clients).await {
+            Ok(_) => (),
+            Err(err) => {
+                warn!("Client thread for management encountered an error : {err}");
+                let ron_text = ron::to_string(&ManagementClientError::from(err))?;
                 write_stream.write_all(ron_text.as_bytes()).await?;
             }
+        }
+    }
+    Ok(())
+}
+
+async fn process_request(
+    request: &str,
+    write_stream: &mut OwnedWriteHalf,
+    clients: &ClientsHandle,
+) -> Result<()> {
+    let client_message = ron::from_str::<ManagmentClientMessage>(request)?;
+    debug!("Management received from client : {client_message:?}");
+
+    match client_message {
+        ManagmentClientMessage::ListClient => {
+            let ron_text = ron::to_string(&clients.borrow().values().collect::<Vec<_>>())?;
+            write_stream.write_all(ron_text.as_bytes()).await?;
         }
     }
     Ok(())
