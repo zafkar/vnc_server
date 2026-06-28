@@ -4,7 +4,6 @@ use crate::{
     auth_provider::AuthProvider,
     capture::Frame,
     input_controller::KeyEvent,
-    mgmt_server::{ClientInfo, ClientStatus},
     protocol::{
         RecvFrom, SendInto,
         client_msg::{ClientMessage, MouseButtonMask},
@@ -24,6 +23,9 @@ use anyhow::{Result, anyhow};
 use tokio::{net::TcpStream, spawn, sync};
 use tracing::{debug, info};
 
+#[cfg(feature = "management")]
+use crate::mgmt_server::{ClientInfo, ClientStatus};
+
 pub(super) struct ClientConnexion {
     pub width: u16,
     pub height: u16,
@@ -34,6 +36,7 @@ pub(super) struct ClientConnexion {
     pub mouse_buttons_sender: sync::mpsc::Sender<MouseButtonMask>,
     pub keyboard_sender: sync::mpsc::Sender<KeyEvent>,
     pub auth_provider: Arc<dyn AuthProvider>,
+    #[cfg(feature = "management")]
     pub info: sync::watch::Sender<ClientInfo>,
 }
 
@@ -47,6 +50,7 @@ impl ClientConnexion {
 
         let requested_security = SecurityType::recv(&mut stream).await?;
         info!("Requested security is {requested_security:?}");
+        #[cfg(feature = "management")]
         self.info
             .send_modify(|info| info.auth_type = Some(requested_security));
 
@@ -62,6 +66,7 @@ impl ClientConnexion {
             security_result.get_permissions()
         };
         info!("Client connected with permissions {user_permissions:?}");
+        #[cfg(feature = "management")]
         self.info.send_modify(|info| {
             info.permissions = Some(user_permissions);
             info.status = ClientStatus::Authorized;
@@ -78,6 +83,7 @@ impl ClientConnexion {
         }
         .send(&mut stream)
         .await?;
+        #[cfg(feature = "management")]
         self.info.send_modify(|info| {
             info.pixel_format = Some(self.pixel_format);
             info.status = ClientStatus::Initialized;
@@ -96,6 +102,7 @@ impl ClientConnexion {
         let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
         let mut prev_mouse_buttons = MouseButtonMask::default();
         let mut target_pixel_format = None;
+        #[cfg(feature = "management")]
         self.info.send_modify(|info| {
             info.status = ClientStatus::Running;
         });
@@ -111,6 +118,7 @@ impl ClientConnexion {
                         self.height,
                         pixel_format,
                     )?;
+                    #[cfg(feature = "management")]
                     self.info.send_modify(|info| {
                         info.pixel_format = Some(pixel_format);
                     });
@@ -129,6 +137,7 @@ impl ClientConnexion {
                             .send(AlphaCursorPseudoEncodings.get_message()?)
                             .await?;
                     }
+                    #[cfg(feature = "management")]
                     self.info.send_modify(|info| {
                         info.encoding = Some(encoding_type);
                     });
@@ -194,6 +203,7 @@ impl ClientConnexion {
             }
         }
 
+        #[cfg(feature = "management")]
         self.info.send_modify(|info| {
             info.status = ClientStatus::Dead;
         });

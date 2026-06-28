@@ -1,15 +1,20 @@
+#[cfg(feature = "management")]
 use std::collections::HashMap;
 
 use crate::{
     capture::Capturer,
     config::Config,
     input_controller::{Controller, ControllerChannels},
-    mgmt_server::{Client, ClientInfo, ManagmentServer},
     server::client_connexion::ClientConnexion,
 };
 use anyhow::Result;
-use tokio::{net::TcpListener, spawn, sync, task::spawn_blocking};
+use tokio::{net::TcpListener, spawn, task::spawn_blocking};
 use tracing::{error, info, warn};
+
+#[cfg(feature = "management")]
+use crate::mgmt_server::{Client, ClientInfo, ManagmentServer};
+#[cfg(feature = "management")]
+use tokio::sync;
 
 mod client_connexion;
 
@@ -56,23 +61,27 @@ impl VNCServer {
 
         let auth_provider = self.config.auth_provider.init().await?;
 
+        #[cfg(feature = "management")]
         let (client_updater, client_watcher) = sync::watch::channel(HashMap::new());
-
-        let mgmt_config = self.config.management.clone();
-        spawn(async {
-            if let Some(mgmt_config) = mgmt_config {
-                let mut management_server =
-                    ManagmentServer::new(mgmt_config.clone(), client_watcher);
-                match management_server.start().await {
-                    Ok(_) => warn!("Management server stopped"),
-                    Err(err) => error!("Management server crashed : {err}"),
+        #[cfg(feature = "management")]
+        {
+            let mgmt_config = self.config.management.clone();
+            spawn(async {
+                if let Some(mgmt_config) = mgmt_config {
+                    let mut management_server =
+                        ManagmentServer::new(mgmt_config.clone(), client_watcher);
+                    match management_server.start().await {
+                        Ok(_) => warn!("Management server stopped"),
+                        Err(err) => error!("Management server crashed : {err}"),
+                    }
                 }
-            }
-        });
+            });
+        }
 
         let listener = TcpListener::bind(self.config.server.bind_address.clone()).await?;
 
         while let Ok((stream, addr)) = listener.accept().await {
+            #[cfg(feature = "management")]
             let (client_info_updater, client_info_watcher) =
                 sync::watch::channel(ClientInfo::new(addr.clone()));
 
@@ -86,20 +95,26 @@ impl VNCServer {
                 pixel_format: self.config.server.pixel_format,
                 auth_provider: auth_provider.clone(),
                 available_security: self.config.server.auth_protocols.clone(),
+                #[cfg(feature = "management")]
                 info: client_info_updater.clone(),
             };
+            #[allow(unused)]
             let handle = spawn(async move {
                 match client_connexion.start(stream).await {
                     Ok(_) => info!("Client {addr:?} disconnected"),
                     Err(err) => warn!("Client thread for {addr:?} failed : {err}"),
                 }
+                #[cfg(feature = "management")]
                 client_info_updater
                     .send_modify(|info| info.status = crate::mgmt_server::ClientStatus::Dead);
             });
-            let client = Client::new(handle.abort_handle(), client_info_watcher);
-            client_updater.send_modify(|clients| {
-                clients.insert(client.uuid.clone(), client);
-            });
+            #[cfg(feature = "management")]
+            {
+                let client = Client::new(handle.abort_handle(), client_info_watcher);
+                client_updater.send_modify(|clients| {
+                    clients.insert(client.uuid.clone(), client);
+                });
+            }
         }
 
         Ok(())

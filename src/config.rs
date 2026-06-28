@@ -117,6 +117,7 @@ impl Default for ManagmentServerConfig {
     }
 }
 
+#[cfg(feature = "management")]
 fn default_mgmt_bind_address() -> String {
     "127.0.0.1:5899".to_string()
 }
