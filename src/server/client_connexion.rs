@@ -20,7 +20,12 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
-use tokio::{net::TcpStream, spawn, sync, time::Instant};
+use tokio::{
+    io::{AsyncWriteExt, BufWriter},
+    net::TcpStream,
+    spawn, sync,
+    time::Instant,
+};
 use tracing::{debug, info};
 
 #[cfg(feature = "management")]
@@ -89,11 +94,13 @@ impl ClientConnexion {
             info.status = ClientStatus::Initialized;
         });
 
-        let (mut read_stream, mut write_stream) = stream.into_split();
+        let (mut read_stream, write_stream) = stream.into_split();
         let (sender_to_client, mut receiver_to_client) = sync::mpsc::channel::<ServerMessage>(128);
         spawn(async move {
+            let mut buffer = BufWriter::new(write_stream);
             while let Some(message) = receiver_to_client.recv().await {
-                message.send(&mut write_stream).await?;
+                message.send(&mut buffer).await?;
+                buffer.flush().await?;
             }
 
             Ok::<_, anyhow::Error>(())
