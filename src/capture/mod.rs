@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::{Result, anyhow};
 use scrap::Display;
 use tokio::sync;
@@ -39,6 +41,7 @@ impl Capturer {
         debug!("Starting capture loop");
         let mut prev_data_hash = 0;
         loop {
+            let start_time = Instant::now();
             if self.send_screen_frame.receiver_count() > 1 {
                 let frame = match recorder.frame() {
                     Ok(frame) => frame,
@@ -58,7 +61,10 @@ impl Capturer {
                     prev_data_hash = data_hash
                 }
             }
-            std::thread::sleep(self.config.time_between_frame);
+            let elasped_duration = start_time.elapsed();
+            if elasped_duration < self.config.time_between_frame {
+                std::thread::sleep(self.config.time_between_frame - elasped_duration);
+            }
         }
     }
 

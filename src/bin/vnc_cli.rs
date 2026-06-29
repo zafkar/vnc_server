@@ -54,5 +54,6 @@ async fn read_ron_line<T: serde::de::DeserializeOwned, RW: AsyncRead + AsyncWrit
 #[derive(Debug, Clone, serde::Deserialize)]
 struct VNCClient {
     uuid: Uuid,
+    #[allow(unused)]
     client_info: ClientInfo,
 }
