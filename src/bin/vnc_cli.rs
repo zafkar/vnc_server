@@ -25,6 +25,7 @@ async fn main() -> Result<()> {
         make_request(&mut buffer, &ManagmentClientMessage::GetClient(uuid)).await?;
         let client: VNCClient = read_ron_line(&mut buffer).await?;
 
+        print!("\x1B[2J\x1B[H");
         println!("{client:#?}");
         sleep(Duration::from_secs_f32(0.5)).await;
     }
