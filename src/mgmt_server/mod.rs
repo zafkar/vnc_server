@@ -1,22 +1,21 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
-use serde::{Serialize, Serializer};
-use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream, tcp::OwnedWriteHalf},
     spawn, sync,
-    task::AbortHandle,
 };
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    auth_provider::UserPermissions,
     config::ManagmentServerConfig,
-    protocol::{
-        encodings::EncodingType, handshake::security::SecurityType, pixel_format::PixelFormat,
-    },
+    mgmt_server::client::{Client, ClientStatus},
 };
+
+pub mod client;
+pub mod stats;
 
 type ClientsHandle = sync::watch::Receiver<HashMap<uuid::Uuid, Client>>;
 
@@ -44,8 +43,8 @@ impl ManagmentServer {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
-enum ManagmentClientMessage {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum ManagmentClientMessage {
     ListClients,
     ListAliveClients,
     GetClient(Uuid),
@@ -108,68 +107,6 @@ async fn process_request(
                 .collect::<Vec<_>>(),
         )?,
     };
-    write_stream.write_all(ron_text.as_bytes()).await?;
+    write_stream.write_all((ron_text + "\n").as_bytes()).await?;
     Ok(())
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct Client {
-    pub uuid: Uuid,
-    #[serde(skip_serializing)]
-    pub abort_handle: AbortHandle,
-    #[serde(serialize_with = "serialize_watch_client")]
-    pub client_info: sync::watch::Receiver<ClientInfo>,
-}
-
-fn serialize_watch_client<S>(
-    watcher: &sync::watch::Receiver<ClientInfo>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    watcher.borrow().serialize(serializer)
-}
-
-impl Client {
-    pub fn new(abort_handle: AbortHandle, client_info: sync::watch::Receiver<ClientInfo>) -> Self {
-        Self {
-            uuid: Uuid::now_v7(),
-            abort_handle,
-            client_info,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct ClientInfo {
-    pub status: ClientStatus,
-    pub addr: SocketAddr,
-    pub auth_type: Option<SecurityType>,
-    pub permissions: Option<UserPermissions>,
-    pub encoding: Option<EncodingType>,
-    pub pixel_format: Option<PixelFormat>,
-}
-
-impl ClientInfo {
-    pub fn new(addr: SocketAddr) -> Self {
-        Self {
-            status: ClientStatus::default(),
-            addr,
-            auth_type: None,
-            permissions: None,
-            encoding: None,
-            pixel_format: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
-pub enum ClientStatus {
-    #[default]
-    Starting,
-    Authorized,
-    Initialized,
-    Running,
-    Dead,
 }

@@ -12,7 +12,10 @@ use tokio::{net::TcpListener, spawn, task::spawn_blocking};
 use tracing::{error, info, warn};
 
 #[cfg(feature = "management")]
-use crate::mgmt_server::{Client, ClientInfo, ManagmentServer};
+use crate::mgmt_server::{
+    ManagmentServer,
+    client::{Client, ClientInfo, ClientStatus},
+};
 #[cfg(feature = "management")]
 use tokio::sync;
 
@@ -105,8 +108,7 @@ impl VNCServer {
                     Err(err) => warn!("Client thread for {addr:?} failed : {err}"),
                 }
                 #[cfg(feature = "management")]
-                client_info_updater
-                    .send_modify(|info| info.status = crate::mgmt_server::ClientStatus::Dead);
+                client_info_updater.send_modify(|info| info.status = ClientStatus::Dead);
             });
             #[cfg(feature = "management")]
             {

@@ -20,11 +20,11 @@ use crate::{
     },
 };
 use anyhow::{Result, anyhow};
-use tokio::{net::TcpStream, spawn, sync};
+use tokio::{net::TcpStream, spawn, sync, time::Instant};
 use tracing::{debug, info};
 
 #[cfg(feature = "management")]
-use crate::mgmt_server::{ClientInfo, ClientStatus};
+use crate::mgmt_server::client::{ClientInfo, ClientStatus};
 
 pub(super) struct ClientConnexion {
     pub width: u16,
@@ -145,6 +145,7 @@ impl ClientConnexion {
                         continue;
                     }
                     if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
+                        let start_time = Instant::now();
                         let data = self.receive_screen_frame.borrow().clone();
                         self.receive_screen_frame.mark_unchanged();
                         let dest_pixel_format_data = match &target_pixel_format {
@@ -162,6 +163,10 @@ impl ClientConnexion {
                                 encoder.encode(rect, &dest_pixel_format_data)?,
                             ))
                             .await?;
+                        self.info.send_modify(|info| {
+                            info.time_for_frame_stats
+                                .add(start_time.elapsed().as_secs_f32());
+                        });
                     } else {
                         sender_to_client
                             .send(ServerMessage::FramebufferUpdate(vec![]))
