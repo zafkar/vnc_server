@@ -98,3 +98,50 @@ fn u32_to_u16_pixel_format_conversion() {
 
     assert_eq!(converted, vec![0xf8, 0x00, 0x07, 0xe0, 0x00, 0x1f])
 }
+
+#[test]
+fn u32_to_u8_pixel_format_conversion_realvnc() {
+    let src_format = PixelFormat {
+        bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U32,
+        depth: 24,
+        big_endian: crate::protocol::primitives::Flag::Yes,
+        true_color: crate::protocol::primitives::Flag::Yes,
+        red_max: 255,
+        green_max: 255,
+        blue_max: 255,
+        red_shift: 16,
+        green_shift: 8,
+        blue_shift: 0,
+    };
+
+    let dest_format = PixelFormat {
+        bits_per_pixel: crate::protocol::pixel_format::BitsPerPixel::U8,
+        depth: 8,
+        big_endian: crate::protocol::primitives::Flag::No,
+        true_color: crate::protocol::primitives::Flag::Yes,
+        red_max: 3,
+        green_max: 3,
+        blue_max: 3,
+        red_shift: 4,
+        green_shift: 2,
+        blue_shift: 0,
+    };
+
+    let data = vec![
+        0x0u8, 0xff, 0x0, 0x0, 0x0, 0x0, 0xff, 0x0, 0x0, 0x0, 0x0, 0xff,
+    ];
+
+    print!("source :");
+    data.iter().for_each(|b| print!("{:02X} ", b));
+    println!();
+
+    let converted = src_format
+        .convert_data_to_pixel_format(&dest_format, &data)
+        .unwrap();
+
+    print!("dest :");
+    converted.iter().for_each(|b| print!("{:0>2x} ", b));
+    println!();
+
+    assert_eq!(converted, vec![0x30, 0x0c, 0x03])
+}

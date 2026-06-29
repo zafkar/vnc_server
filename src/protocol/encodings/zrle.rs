@@ -3,8 +3,6 @@ use anyhow::Result;
 use crate::protocol::encodings::Encoder;
 
 pub struct ZRLEEncoder {
-    pub width: u16,
-    pub height: u16,
     pub compressor: flate2::Compress,
     pub pixel_format: rfb_encodings::PixelFormat,
 }
@@ -21,8 +19,8 @@ impl Encoder for ZRLEEncoder {
     ) -> Result<Vec<crate::protocol::server_msg::UpdateRect>> {
         let encoded_data = rfb_encodings::zrle::encode_zrle_persistent(
             data,
-            self.width,
-            self.height,
+            requested_rect.width,
+            requested_rect.height,
             &self.pixel_format,
             &mut self.compressor,
         )?;
@@ -32,5 +30,9 @@ impl Encoder for ZRLEEncoder {
             encoding_type: self.encoding_type(),
             data: encoded_data,
         }])
+    }
+
+    fn set_pixel_format(&mut self, format: crate::protocol::pixel_format::PixelFormat) {
+        self.pixel_format = format.into();
     }
 }

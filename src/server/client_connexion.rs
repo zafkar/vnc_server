@@ -112,12 +112,8 @@ impl ClientConnexion {
                 ClientMessage::SetPixelFormat(pixel_format) => {
                     info!("Client asks for {pixel_format:?}");
                     target_pixel_format = Some(pixel_format);
-                    info!("Reinitializing encoder");
-                    encoder = encoder.encoding_type().init_encoder(
-                        self.width,
-                        self.height,
-                        pixel_format,
-                    )?;
+                    info!("Setting pixel_format in encoding");
+                    encoder.set_pixel_format(pixel_format);
                     #[cfg(feature = "management")]
                     self.info.send_modify(|info| {
                         info.pixel_format = Some(pixel_format);

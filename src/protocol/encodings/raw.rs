@@ -20,4 +20,6 @@ impl Encoder for RawEncoder {
             data: data.to_vec(),
         }])
     }
+
+    fn set_pixel_format(&mut self, _format: crate::protocol::pixel_format::PixelFormat) {}
 }

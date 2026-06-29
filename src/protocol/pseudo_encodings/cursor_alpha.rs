@@ -40,7 +40,5 @@ fn load_png() -> Result<(OutputInfo, Vec<u8>)> {
     ];
     let info = png_reader.next_frame(&mut buf)?;
 
-    dbg!(&info);
-
     Ok((info, buf))
 }

@@ -54,8 +54,6 @@ impl EncodingType {
             EncodingType::Raw => Ok(Box::new(RawEncoder)),
             #[cfg(feature = "encoding_zrle")]
             EncodingType::ZRLE => Ok(Box::new(ZRLEEncoder {
-                width,
-                height,
                 compressor: Compress::new(Compression::fast(), true),
                 pixel_format: pixel_format.into(),
             })),
@@ -89,4 +87,5 @@ impl EncodingType {
 pub trait Encoder: Send {
     fn encode(&mut self, requested_rect: Rect, data: &[u8]) -> Result<Vec<UpdateRect>>;
     fn encoding_type(&self) -> EncodingType;
+    fn set_pixel_format(&mut self, format: PixelFormat);
 }

@@ -39,4 +39,8 @@ impl Encoder for TightEncoder {
             })
             .collect())
     }
+
+    fn set_pixel_format(&mut self, format: crate::protocol::pixel_format::PixelFormat) {
+        self.pixel_format = format.into();
+    }
 }
