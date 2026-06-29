@@ -14,7 +14,7 @@ use crate::{
             version::Version,
         },
         pixel_format::PixelFormat,
-        primitives::{Flag, Pos},
+        primitives::{Flag, Pos, Rect},
         pseudo_encodings::cursor_alpha::AlphaCursorPseudoEncodings,
         server_msg::ServerMessage,
     },
@@ -23,7 +23,8 @@ use anyhow::{Result, anyhow};
 use tokio::{
     io::{AsyncWriteExt, BufWriter},
     net::TcpStream,
-    spawn, sync,
+    spawn,
+    sync::{self, Mutex},
     time::Instant,
 };
 use tracing::{debug, info};
@@ -106,7 +107,7 @@ impl ClientConnexion {
             Ok::<_, anyhow::Error>(())
         });
 
-        let mut encoder: Box<dyn Encoder> = Box::new(RawEncoder);
+        let mut encoder: Arc<Mutex<dyn Encoder>> = Arc::new(Mutex::new(RawEncoder));
         let mut prev_mouse_buttons = MouseButtonMask::default();
         let mut target_pixel_format = None;
         #[cfg(feature = "management")]
@@ -120,7 +121,7 @@ impl ClientConnexion {
                     info!("Client asks for {pixel_format:?}");
                     target_pixel_format = Some(pixel_format);
                     info!("Setting pixel_format in encoding");
-                    encoder.set_pixel_format(pixel_format);
+                    encoder.lock().await.set_pixel_format(pixel_format);
                     #[cfg(feature = "management")]
                     self.info.send_modify(|info| {
                         info.pixel_format = Some(pixel_format);
@@ -151,34 +152,16 @@ impl ClientConnexion {
                         debug!("Client forbidden from view");
                         continue;
                     }
-                    if self.receive_screen_frame.has_changed()? || incremental == Flag::No {
-                        let start_time = Instant::now();
-                        let data = self.receive_screen_frame.borrow().clone();
-                        self.receive_screen_frame.mark_unchanged();
-                        let dest_pixel_format_data = match &target_pixel_format {
-                            // Some(dest_format) if *dest_format == data.format => {
-                            //     data.get_src_rect(rect, self.height as usize)
-                            // }
-                            Some(dest_format) => data.format.convert_data_to_pixel_format(
-                                dest_format,
-                                &data.get_src_rect(rect, self.height as usize),
-                            )?,
-                            None => data.get_src_rect(rect, self.height as usize),
-                        };
-                        sender_to_client
-                            .send(ServerMessage::FramebufferUpdate(
-                                encoder.encode(rect, &dest_pixel_format_data)?,
-                            ))
-                            .await?;
-                        self.info.send_modify(|info| {
-                            info.time_for_frame_stats
-                                .add(start_time.elapsed().as_secs_f32());
-                        });
-                    } else {
-                        sender_to_client
-                            .send(ServerMessage::FramebufferUpdate(vec![]))
-                            .await?;
-                    }
+                    spawn(send_framebuffer_update(
+                        sender_to_client.clone(),
+                        self.receive_screen_frame.clone(),
+                        self.info.clone(),
+                        rect,
+                        incremental,
+                        encoder.clone(),
+                        target_pixel_format,
+                        self.height as usize,
+                    ));
                 }
                 ClientMessage::KeyEvent { pressed, key } => {
                     debug!("Client send key {pressed:?}, {key:?}");
@@ -218,4 +201,42 @@ impl ClientConnexion {
 
         Ok(())
     }
+}
+
+async fn send_framebuffer_update(
+    sender_to_client: sync::mpsc::Sender<ServerMessage>,
+    mut receive_screen_frame: sync::watch::Receiver<Frame>,
+    info: sync::watch::Sender<ClientInfo>,
+    rect: Rect,
+    incremental: Flag,
+    encoder: Arc<Mutex<dyn Encoder>>,
+    target_pixel_format: Option<PixelFormat>,
+    height: usize,
+) -> Result<()> {
+    if receive_screen_frame.has_changed()? || incremental == Flag::No {
+        let start_time = Instant::now();
+        let data = receive_screen_frame.borrow().clone();
+        receive_screen_frame.mark_unchanged();
+        let dest_pixel_format_data = match &target_pixel_format {
+            Some(dest_format) => data
+                .format
+                .convert_data_to_pixel_format(dest_format, &data.get_src_rect(rect, height))?,
+            None => data.get_src_rect(rect, height),
+        };
+        sender_to_client
+            .send(ServerMessage::FramebufferUpdate(
+                encoder.lock().await.encode(rect, &dest_pixel_format_data)?,
+            ))
+            .await?;
+        info.send_modify(|info| {
+            info.time_for_frame_stats
+                .add(start_time.elapsed().as_secs_f32());
+        });
+    } else {
+        sender_to_client
+            .send(ServerMessage::FramebufferUpdate(vec![]))
+            .await?;
+    }
+
+    Ok(())
 }

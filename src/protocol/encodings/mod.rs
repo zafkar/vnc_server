@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use anyhow::{Result, anyhow};
 
 use num_enum::{FromPrimitive, IntoPrimitive};
+use tokio::sync::Mutex;
 use tracing::warn;
 
 use crate::protocol::{
@@ -59,25 +62,33 @@ impl EncodingType {
         #[allow(unused)] width: u16,
         #[allow(unused)] height: u16,
         #[allow(unused)] pixel_format: PixelFormat,
-    ) -> Result<Box<dyn Encoder>> {
+    ) -> Result<Arc<Mutex<dyn Encoder>>> {
         match self {
-            EncodingType::Raw => Ok(Box::new(RawEncoder)),
+            EncodingType::Raw => Ok(Arc::new(Mutex::new(RawEncoder))),
             #[cfg(feature = "encoding_zrle")]
-            EncodingType::ZRLE => Ok(Box::new(ZRLEEncoder {
+            EncodingType::ZRLE => Ok(Arc::new(Mutex::new(ZRLEEncoder {
                 compressor: Compress::new(Compression::fast(), true),
                 pixel_format: pixel_format.into(),
-            })),
+            }))),
             #[cfg(feature = "encoding_tight")]
             EncodingType::Tight => {
+                use std::sync::Arc;
+
+                use tokio::sync::Mutex;
+
                 let compression_level = 6;
-                Ok(Box::new(crate::protocol::encodings::tight::TightEncoder {
-                    width,
-                    height,
-                    compressor: rfb_encodings::tight::SimpleTightCompressor::new(compression_level),
-                    pixel_format: pixel_format.into(),
-                    quality: 6,
-                    compression_level,
-                }))
+                Ok(Arc::new(Mutex::new(
+                    crate::protocol::encodings::tight::TightEncoder {
+                        width,
+                        height,
+                        compressor: rfb_encodings::tight::SimpleTightCompressor::new(
+                            compression_level,
+                        ),
+                        pixel_format: pixel_format.into(),
+                        quality: 6,
+                        compression_level,
+                    },
+                )))
             }
             _ => Err(anyhow!("Not an encoding")),
         }
