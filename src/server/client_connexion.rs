@@ -23,8 +23,9 @@ use anyhow::{Result, anyhow};
 use tokio::{
     io::{AsyncWriteExt, BufWriter},
     net::TcpStream,
-    spawn,
+    select, spawn,
     sync::{self, Mutex},
+    task::JoinSet,
     time::Instant,
 };
 use tracing::{debug, info};
@@ -96,12 +97,27 @@ impl ClientConnexion {
         });
 
         let (mut read_stream, write_stream) = stream.into_split();
+        let (sender_drain_request, mut receiver_drain_request) =
+            sync::mpsc::channel::<sync::oneshot::Sender<()>>(128);
         let (sender_to_client, mut receiver_to_client) = sync::mpsc::channel::<ServerMessage>(128);
         spawn(async move {
             let mut buffer = BufWriter::new(write_stream);
-            while let Some(message) = receiver_to_client.recv().await {
-                message.send(&mut buffer).await?;
-                buffer.flush().await?;
+            loop {
+                select! {
+                    Some(drained_tx) = receiver_drain_request.recv() => {
+                        while let Ok(_) = receiver_to_client.try_recv(){}
+                        drained_tx.send(()).map_err(|_| anyhow!("Unwaited drained_tx"))?;
+                    }
+
+                    Some(message) = receiver_to_client.recv() => {
+                        message.send(&mut buffer).await?;
+                        buffer.flush().await?;
+                    }
+
+                    else => {
+                        break;
+                    }
+                }
             }
 
             Ok::<_, anyhow::Error>(())
@@ -115,10 +131,16 @@ impl ClientConnexion {
             info.status = ClientStatus::Running;
         });
 
+        let mut encoding_joinset = JoinSet::new();
+
         while let Ok(client_msg) = ClientMessage::recv(&mut read_stream).await {
             match client_msg {
                 ClientMessage::SetPixelFormat(pixel_format) => {
                     info!("Client asks for {pixel_format:?}");
+                    encoding_joinset.abort_all();
+                    let (wait_for_drain_tx, wait_for_drain_rx) = sync::oneshot::channel::<()>();
+                    sender_drain_request.send(wait_for_drain_tx).await?;
+                    wait_for_drain_rx.await?;
                     target_pixel_format = Some(pixel_format);
                     info!("Setting pixel_format in encoding");
                     encoder.lock().await.set_pixel_format(pixel_format);
@@ -129,6 +151,10 @@ impl ClientConnexion {
                 }
                 ClientMessage::SetEncodings(items) => {
                     info!("Client propose {items:?} as encodings");
+                    encoding_joinset.abort_all();
+                    let (wait_for_drain_tx, wait_for_drain_rx) = sync::oneshot::channel::<()>();
+                    sender_drain_request.send(wait_for_drain_tx).await?;
+                    wait_for_drain_rx.await?;
                     let encoding_type = EncodingType::pick_encoder(&items);
                     info!("{encoding_type:?} choosen");
                     encoder = encoding_type.init_encoder(
@@ -152,7 +178,7 @@ impl ClientConnexion {
                         debug!("Client forbidden from view");
                         continue;
                     }
-                    spawn(send_framebuffer_update(
+                    encoding_joinset.spawn(send_framebuffer_update(
                         sender_to_client.clone(),
                         self.receive_screen_frame.clone(),
                         self.info.clone(),
