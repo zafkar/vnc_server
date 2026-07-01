@@ -90,7 +90,7 @@ impl PixelFormat {
     }
 }
 
-#[cfg(feature = "encoding_zrle")]
+#[cfg(any(feature = "encoding_zrle", feature = "encoding_tight"))]
 impl From<PixelFormat> for rfb_encodings::PixelFormat {
     fn from(value: PixelFormat) -> Self {
         rfb_encodings::PixelFormat {
