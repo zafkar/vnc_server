@@ -61,14 +61,19 @@ impl EncodingType {
         &self,
         #[allow(unused)] width: u16,
         #[allow(unused)] height: u16,
-        #[allow(unused)] pixel_format: PixelFormat,
+        #[allow(unused)] src_pixel_format: PixelFormat,
+        #[allow(unused)] dest_pixel_format: PixelFormat,
     ) -> Result<Arc<Mutex<dyn Encoder>>> {
         match self {
-            EncodingType::Raw => Ok(Arc::new(Mutex::new(RawEncoder))),
+            EncodingType::Raw => Ok(Arc::new(Mutex::new(RawEncoder {
+                src_pixel_format,
+                dest_pixel_format,
+            }))),
             #[cfg(feature = "encoding_zrle")]
             EncodingType::ZRLE => Ok(Arc::new(Mutex::new(ZRLEEncoder {
                 compressor: Compress::new(Compression::fast(), true),
-                pixel_format: pixel_format.into(),
+                client_pixel_format: dest_pixel_format.into(),
+                src_pixel_format,
             }))),
             #[cfg(feature = "encoding_tight")]
             EncodingType::Tight => {
@@ -84,9 +89,10 @@ impl EncodingType {
                         compressor: rfb_encodings::tight::SimpleTightCompressor::new(
                             compression_level,
                         ),
-                        pixel_format: pixel_format.into(),
+                        client_pixel_format: dest_pixel_format.into(),
                         quality: 6,
                         compression_level,
+                        src_pixel_format,
                     },
                 )))
             }

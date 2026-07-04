@@ -123,7 +123,10 @@ impl ClientConnexion {
             Ok::<_, anyhow::Error>(())
         });
 
-        let mut encoder: Arc<Mutex<dyn Encoder>> = Arc::new(Mutex::new(RawEncoder));
+        let mut encoder: Arc<Mutex<dyn Encoder>> = Arc::new(Mutex::new(RawEncoder {
+            src_pixel_format: self.pixel_format,
+            dest_pixel_format: self.pixel_format,
+        }));
         let mut prev_mouse_buttons = MouseButtonMask::default();
         let mut target_pixel_format = None;
         #[cfg(feature = "management")]
@@ -160,6 +163,7 @@ impl ClientConnexion {
                     encoder = encoding_type.init_encoder(
                         self.width,
                         self.height,
+                        self.pixel_format,
                         target_pixel_format.unwrap_or(self.pixel_format),
                     )?;
                     if items.contains(&EncodingType::CursorWithAlpha) {
@@ -185,7 +189,6 @@ impl ClientConnexion {
                         rect,
                         incremental,
                         encoder.clone(),
-                        target_pixel_format,
                         self.height as usize,
                     ));
                 }
@@ -236,22 +239,18 @@ async fn send_framebuffer_update(
     rect: Rect,
     incremental: Flag,
     encoder: Arc<Mutex<dyn Encoder>>,
-    target_pixel_format: Option<PixelFormat>,
     height: usize,
 ) -> Result<()> {
     if receive_screen_frame.has_changed()? || incremental == Flag::No {
         let start_time = Instant::now();
         let data = receive_screen_frame.borrow().clone();
         receive_screen_frame.mark_unchanged();
-        let dest_pixel_format_data = match &target_pixel_format {
-            Some(dest_format) => data
-                .format
-                .convert_data_to_pixel_format(dest_format, &data.get_src_rect(rect, height))?,
-            None => data.get_src_rect(rect, height),
-        };
         sender_to_client
             .send(ServerMessage::FramebufferUpdate(
-                encoder.lock().await.encode(rect, &dest_pixel_format_data)?,
+                encoder
+                    .lock()
+                    .await
+                    .encode(rect, &data.get_src_rect(rect, height))?,
             ))
             .await?;
         info.send_modify(|info| {

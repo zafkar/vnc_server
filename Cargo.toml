@@ -30,8 +30,8 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 [features]
 default = [
     "management",
-    #"encoding_zrle",
-    "encoding_tight",
+    "encoding_zrle",
+    #"encoding_tight",
     "auth_provider_file",
     "auth_provider_pam",
     "auth_method_mslogonii"

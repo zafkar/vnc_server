@@ -1,10 +1,11 @@
 use anyhow::Result;
 
-use crate::protocol::encodings::Encoder;
+use crate::protocol::{encodings::Encoder, pixel_format::PixelFormat};
 
 pub struct ZRLEEncoder {
     pub compressor: flate2::Compress,
-    pub pixel_format: rfb_encodings::PixelFormat,
+    pub src_pixel_format: PixelFormat,
+    pub client_pixel_format: rfb_encodings::PixelFormat,
 }
 
 impl Encoder for ZRLEEncoder {
@@ -21,7 +22,7 @@ impl Encoder for ZRLEEncoder {
             data,
             requested_rect.width,
             requested_rect.height,
-            &self.pixel_format,
+            &self.client_pixel_format,
             &mut self.compressor,
         )?;
 
@@ -33,6 +34,6 @@ impl Encoder for ZRLEEncoder {
     }
 
     fn set_pixel_format(&mut self, format: crate::protocol::pixel_format::PixelFormat) {
-        self.pixel_format = format.into();
+        self.client_pixel_format = format.into();
     }
 }

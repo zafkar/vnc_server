@@ -1,10 +1,16 @@
-use crate::protocol::{encodings::Encoder, primitives::Rect, server_msg::UpdateRect};
+use crate::protocol::{
+    encodings::Encoder,
+    pixel_format::{BitsPerPixel, PixelFormat},
+    primitives::{Flag, Rect},
+    server_msg::UpdateRect,
+};
 
 pub struct TightEncoder {
     pub width: u16,
     pub height: u16,
     pub compressor: rfb_encodings::tight::SimpleTightCompressor,
-    pub pixel_format: rfb_encodings::PixelFormat,
+    pub src_pixel_format: PixelFormat,
+    pub client_pixel_format: rfb_encodings::PixelFormat,
     pub quality: u8,
     pub compression_level: u8,
 }
@@ -15,13 +21,28 @@ impl Encoder for TightEncoder {
     }
 
     fn encode(&mut self, _requested_rect: Rect, data: &[u8]) -> anyhow::Result<Vec<UpdateRect>> {
-        let encoded_data = rfb_encodings::tight::encode_tight_rects(
+        let data_in_encoder_format = self.src_pixel_format.convert_data_to_pixel_format(
+            &PixelFormat {
+                bits_per_pixel: BitsPerPixel::U32,
+                depth: 24,
+                big_endian: Flag::Yes,
+                true_color: Flag::Yes,
+                red_max: 255,
+                green_max: 255,
+                blue_max: 255,
+                red_shift: 24,
+                green_shift: 16,
+                blue_shift: 8,
+            },
             data,
+        )?;
+        let encoded_data = rfb_encodings::tight::encode_tight_rects(
+            &data_in_encoder_format,
             self.width,
             self.height,
             self.quality,
             self.compression_level,
-            &self.pixel_format,
+            &self.client_pixel_format,
             &mut self.compressor,
         );
 
@@ -41,6 +62,6 @@ impl Encoder for TightEncoder {
     }
 
     fn set_pixel_format(&mut self, format: crate::protocol::pixel_format::PixelFormat) {
-        self.pixel_format = format.into();
+        self.client_pixel_format = format.into();
     }
 }
