@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 
+use bytes::BytesMut;
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::sync::Mutex;
 use tracing::warn;
@@ -81,7 +82,7 @@ impl EncodingType {
 
                 use tokio::sync::Mutex;
 
-                let compression_level = 6;
+                let compression_level = 1;
                 Ok(Arc::new(Mutex::new(
                     crate::protocol::encodings::tight::TightEncoder {
                         width,
@@ -90,7 +91,7 @@ impl EncodingType {
                             compression_level,
                         ),
                         client_pixel_format: dest_pixel_format.into(),
-                        quality: 6,
+                        quality: 1,
                         compression_level,
                         src_pixel_format,
                     },
@@ -112,7 +113,7 @@ impl EncodingType {
 }
 
 pub trait Encoder: Send {
-    fn encode(&mut self, requested_rect: Rect, data: &[u8]) -> Result<Vec<UpdateRect>>;
+    fn encode(&mut self, requested_rect: Rect, data: BytesMut) -> Result<Vec<UpdateRect>>;
     fn encoding_type(&self) -> EncodingType;
     fn set_pixel_format(&mut self, format: PixelFormat);
 }

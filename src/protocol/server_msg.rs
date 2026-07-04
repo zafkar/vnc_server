@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use tokio::io::AsyncWriteExt;
 
 use crate::protocol::{
@@ -67,7 +68,7 @@ impl SendInto for ServerMessage {
 pub struct UpdateRect {
     pub rect: Rect,
     pub encoding_type: EncodingType,
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 impl SendInto for UpdateRect {

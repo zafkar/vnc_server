@@ -1,3 +1,5 @@
+use bytes::BytesMut;
+
 use crate::protocol::{
     encodings::Encoder,
     pixel_format::{BitsPerPixel, PixelFormat},
@@ -20,8 +22,12 @@ impl Encoder for TightEncoder {
         super::EncodingType::Tight
     }
 
-    fn encode(&mut self, _requested_rect: Rect, data: &[u8]) -> anyhow::Result<Vec<UpdateRect>> {
-        let data_in_encoder_format = self.src_pixel_format.convert_data_to_pixel_format(
+    fn encode(
+        &mut self,
+        _requested_rect: Rect,
+        mut data: BytesMut,
+    ) -> anyhow::Result<Vec<UpdateRect>> {
+        self.src_pixel_format.convert_data_in_place(
             &PixelFormat {
                 bits_per_pixel: BitsPerPixel::U32,
                 depth: 24,
@@ -34,10 +40,10 @@ impl Encoder for TightEncoder {
                 green_shift: 16,
                 blue_shift: 8,
             },
-            data,
+            &mut data,
         )?;
         let encoded_data = rfb_encodings::tight::encode_tight_rects(
-            &data_in_encoder_format,
+            &data,
             self.width,
             self.height,
             self.quality,
@@ -56,7 +62,7 @@ impl Encoder for TightEncoder {
                     height: u.3,
                 },
                 encoding_type: self.encoding_type(),
-                data: u.4.iter().cloned().collect(),
+                data: u.4.clone().freeze(),
             })
             .collect())
     }

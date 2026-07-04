@@ -7,6 +7,7 @@ default-run = "vnc_server"
 
 [dependencies]
 anyhow = "1.0.102"
+bytes = "1.12.0"
 des = "0.9.0"
 enigo = { version = "0.6.1", features = ["tokio"] }
 flate2 = "1.1.9"
@@ -31,7 +32,7 @@ xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 default = [
     "management",
     "encoding_zrle",
-    #"encoding_tight",
+    "encoding_tight",
     "auth_provider_file",
     "auth_provider_pam",
     "auth_method_mslogonii"

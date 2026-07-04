@@ -1,4 +1,5 @@
 use anyhow::{Result, anyhow};
+use bytes::{Buf, BufMut, BytesMut};
 use num_enum::{FromPrimitive, IntoPrimitive};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -19,11 +20,7 @@ pub struct PixelFormat {
 }
 
 impl PixelFormat {
-    pub fn convert_data_to_pixel_format(
-        &self,
-        target_format: &PixelFormat,
-        data: &[u8],
-    ) -> Result<Vec<u8>> {
+    pub fn convert_data(&self, target_format: &PixelFormat, data: BytesMut) -> Result<BytesMut> {
         if self.true_color == Flag::No || target_format.true_color == Flag::No {
             return Err(anyhow!(
                 "Conversion from true_color to palette not implemented"
@@ -31,7 +28,7 @@ impl PixelFormat {
         }
 
         if self == target_format {
-            return Ok(data.to_vec());
+            return Ok(data);
         }
 
         let grouped_data = match self.bits_per_pixel {
@@ -59,20 +56,7 @@ impl PixelFormat {
         Ok(grouped_data
             .iter()
             .flat_map(|src_color| {
-                let red = (src_color >> self.red_shift & self.red_max as u32)
-                    * target_format.red_max as u32
-                    / self.red_max as u32;
-                let green = (src_color >> self.green_shift & self.green_max as u32)
-                    * target_format.green_max as u32
-                    / self.green_max as u32;
-                let blue = (src_color >> self.blue_shift & self.blue_max as u32)
-                    * target_format.blue_max as u32
-                    / self.blue_max as u32;
-
-                let dest_color = red << target_format.red_shift
-                    | green << target_format.green_shift
-                    | blue << target_format.blue_shift;
-
+                let dest_color = self.convert_u32(target_format, *src_color);
                 match target_format.bits_per_pixel {
                     BitsPerPixel::U8 => vec![dest_color as u8],
                     BitsPerPixel::U16 => match target_format.big_endian {
@@ -87,6 +71,82 @@ impl PixelFormat {
                 }
             })
             .collect())
+    }
+
+    /// Convert a normalized u32 color from self to target pixel format
+    #[inline]
+    fn convert_u32(&self, target_format: &PixelFormat, value: u32) -> u32 {
+        let red = (value >> self.red_shift & self.red_max as u32) * target_format.red_max as u32
+            / self.red_max as u32;
+        let green = (value >> self.green_shift & self.green_max as u32)
+            * target_format.green_max as u32
+            / self.green_max as u32;
+        let blue = (value >> self.blue_shift & self.blue_max as u32)
+            * target_format.blue_max as u32
+            / self.blue_max as u32;
+
+        red << target_format.red_shift
+            | green << target_format.green_shift
+            | blue << target_format.blue_shift
+    }
+
+    pub fn convert_data_in_place(
+        &self,
+        target_format: &PixelFormat,
+        data: &mut BytesMut,
+    ) -> Result<()> {
+        if self.true_color == Flag::No || target_format.true_color == Flag::No {
+            return Err(anyhow!(
+                "Conversion from true_color to palette not implemented"
+            ));
+        }
+
+        if self == target_format {
+            return Ok(());
+        }
+
+        if self.bits_per_pixel < target_format.bits_per_pixel {
+            return Err(anyhow!(
+                "Target format is wider than src, would overwrite read, cannot convert in place"
+            ));
+        }
+
+        let step = self.bits_per_pixel.bytes_size();
+        let dest_step = target_format.bits_per_pixel.bytes_size();
+        let mut j = 0;
+        for i in (0..data.len()).step_by(step) {
+            let pixel_color = match self.bits_per_pixel {
+                BitsPerPixel::U8 => data[i] as u32,
+                BitsPerPixel::U16 => match self.big_endian {
+                    Flag::No => (&data[i..]).get_u16_le() as u32,
+                    Flag::Yes => (&data[i..]).get_u16() as u32,
+                },
+                BitsPerPixel::U32 => match self.big_endian {
+                    Flag::No => (&data[i..]).get_u32_le(),
+                    Flag::Yes => (&data[i..]).get_u32(),
+                },
+                BitsPerPixel::Invalid => return Err(anyhow!("Invalid src pixel_format")),
+            };
+
+            let dest_color = self.convert_u32(target_format, pixel_color);
+            match target_format.bits_per_pixel {
+                BitsPerPixel::U8 => (&mut data[j..]).put_u8(dest_color as u8),
+                BitsPerPixel::U16 => match target_format.big_endian {
+                    Flag::No => (&mut data[j..]).put_u16_le(dest_color as u16),
+                    Flag::Yes => (&mut data[j..]).put_u16(dest_color as u16),
+                },
+                BitsPerPixel::U32 => match target_format.big_endian {
+                    Flag::No => (&mut data[j..]).put_u32_le(dest_color),
+                    Flag::Yes => (&mut data[j..]).put_u32(dest_color),
+                },
+                BitsPerPixel::Invalid => return Err(anyhow!("Invalid dest pixel_format")),
+            }
+            j += dest_step;
+        }
+
+        data.truncate(j);
+
+        Ok(())
     }
 }
 
@@ -181,6 +241,8 @@ impl RecvFrom for PixelFormat {
     Copy,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     FromPrimitive,
     IntoPrimitive,
     serde::Deserialize,

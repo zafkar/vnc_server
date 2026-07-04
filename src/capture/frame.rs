@@ -1,20 +1,22 @@
+use bytes::BytesMut;
+
 use crate::protocol::{pixel_format::PixelFormat, primitives::Rect};
 
 #[derive(Debug, Clone, Default)]
 pub struct Frame {
-    pub data: Vec<u8>,
+    pub data: BytesMut,
     pub format: PixelFormat,
 }
 
 impl Frame {
-    pub fn get_src_rect(&self, rect: Rect, height: usize) -> Vec<u8> {
+    pub fn get_src_rect(&self, rect: Rect, height: usize) -> BytesMut {
         let bpp = self.format.bits_per_pixel.bytes_size();
         let stride = self.data.len() / height;
 
         let start_x = rect.x_pos as usize * bpp;
         let row_size = rect.width as usize * bpp;
 
-        let mut result = Vec::with_capacity(row_size * rect.height as usize);
+        let mut result = BytesMut::with_capacity(row_size * rect.height as usize);
 
         let mut y_index = stride * rect.y_pos as usize;
 
@@ -37,6 +39,6 @@ impl Frame {
 
 impl From<Frame> for Vec<u8> {
     fn from(value: Frame) -> Self {
-        value.data
+        value.data.to_vec()
     }
 }

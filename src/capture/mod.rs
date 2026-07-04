@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use anyhow::{Result, anyhow};
+use bytes::{BufMut, BytesMut};
 use scrap::Display;
 use tokio::sync;
 use tracing::debug;
@@ -51,7 +52,8 @@ impl Capturer {
                     }
                     Err(err) => return Err(err.into()),
                 };
-                let data = frame.to_vec();
+                let mut data = BytesMut::with_capacity(frame.len());
+                data.put_slice(&frame);
                 let data_hash = xxh3_128(&data);
                 if prev_data_hash != data_hash {
                     self.send_screen_frame.send_replace(frame::Frame {

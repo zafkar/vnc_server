@@ -4,6 +4,7 @@ use crate::protocol::{
     server_msg::{ServerMessage, UpdateRect},
 };
 use anyhow::{Context, Result};
+use bytes::BytesMut;
 use png::OutputInfo;
 use std::io::BufReader;
 
@@ -12,7 +13,7 @@ pub struct AlphaCursorPseudoEncodings;
 impl AlphaCursorPseudoEncodings {
     pub fn get_message(&self) -> anyhow::Result<ServerMessage> {
         let (_cursor_info, cursor_data) = load_png()?;
-        let mut data = Vec::from_iter(i32::from(EncodingType::Raw).to_be_bytes().into_iter());
+        let mut data = BytesMut::from_iter(i32::from(EncodingType::Raw).to_be_bytes().into_iter());
         data.extend_from_slice(&cursor_data);
         Ok(ServerMessage::FramebufferUpdate(vec![UpdateRect {
             rect: Rect {
@@ -22,7 +23,7 @@ impl AlphaCursorPseudoEncodings {
                 height: 32,
             },
             encoding_type: EncodingType::CursorWithAlpha,
-            data: data,
+            data: data.freeze(),
         }]))
     }
 }

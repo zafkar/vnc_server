@@ -250,7 +250,7 @@ async fn send_framebuffer_update(
                 encoder
                     .lock()
                     .await
-                    .encode(rect, &data.get_src_rect(rect, height))?,
+                    .encode(rect, data.get_src_rect(rect, height))?,
             ))
             .await?;
         info.send_modify(|info| {

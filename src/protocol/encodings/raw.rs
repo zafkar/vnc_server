@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bytes::BytesMut;
 
 use crate::protocol::{encodings::Encoder, pixel_format::PixelFormat, server_msg::UpdateRect};
 
@@ -15,15 +16,14 @@ impl Encoder for RawEncoder {
     fn encode(
         &mut self,
         requested_rect: crate::protocol::primitives::Rect,
-        data: &[u8],
+        mut data: BytesMut,
     ) -> Result<Vec<UpdateRect>> {
-        let dest_format_pixel_data = self
-            .src_pixel_format
-            .convert_data_to_pixel_format(&self.dest_pixel_format, data)?;
+        self.src_pixel_format
+            .convert_data_in_place(&self.dest_pixel_format, &mut data)?;
         Ok(vec![UpdateRect {
             rect: requested_rect,
             encoding_type: self.encoding_type(),
-            data: dest_format_pixel_data,
+            data: data.freeze(),
         }])
     }
 
