@@ -40,7 +40,7 @@ default = [
     "encoding_tight",
     "auth_provider_file",
     "auth_provider_pam",
-    "auth_provider_winlogon",
+    #"auth_provider_winlogon",
     "auth_method_mslogonii"
     ]
 encoding_zrle = ["dep:rfb-encodings"]

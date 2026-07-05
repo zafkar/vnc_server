@@ -110,7 +110,7 @@ impl SendInto for SecurityResult {
         // If denied add a random delay to prevent the client getting information
         if self.is_denied() {
             let random_delay = {
-                let rng = rand::rng();
+                let mut rng = rand::rng();
                 rng.random_range(2000..6000)
             };
             sleep(Duration::from_millis(random_delay)).await;

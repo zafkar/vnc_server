@@ -11,4 +11,4 @@ pub mod server;
 compile_error!("The feature auth_provider_pam only works on linux");
 
 #[cfg(all(feature = "auth_provider_winlogon", not(target_os = "windows")))]
-compile_error!("The feature auth_provider_winlogon only works on linux")
+compile_error!("The feature auth_provider_winlogon only works on linux");

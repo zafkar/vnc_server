@@ -44,5 +44,12 @@
     //     )
     // ),
 
-    management:Some(()),
+    // Server management configuration
+    management:Some((
+        //The bind address of the management server
+        //bind_address: "127.0.0.1:5899"
+    )),
+
+    // Fully disable the management server
+    // management: None,
 )
