@@ -1,8 +1,13 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use num_enum::{FromPrimitive, IntoPrimitive};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use rand::RngExt;
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    time::sleep,
+};
+use tracing::warn;
 
 use crate::{
     auth_provider::{AuthProvider, UserPermissions},
@@ -102,9 +107,19 @@ impl SecurityResult {
 
 impl SendInto for SecurityResult {
     async fn send<S: AsyncWrite + Unpin>(&self, mut stream: S) -> Result<()> {
+        // If denied add a random delay to prevent the client getting information
+        if self.is_denied() {
+            let random_delay = {
+                let rng = rand::rng();
+                rng.random_range(2000..6000)
+            };
+            sleep(Duration::from_millis(random_delay)).await;
+        }
         stream.write_u32(self.get_value()).await?;
         if let Self::Denied(msg) = self {
-            write_handshake_error(&mut stream, msg).await?;
+            warn!("Authentication denied : {msg}");
+            // Don't send the client why the authentication failed for security reason
+            write_handshake_error(&mut stream, "Authentication denied").await?;
         }
         Ok(())
     }
