@@ -37,5 +37,12 @@
     //     )
     // ),
 
+    // WinLogon
+    // auth_provider:r#WinLogon((
+    //     control_group_name:"Administrators",
+    //     view_group_name:"Users"
+    //     )
+    // ),
+
     management:Some(()),
 )

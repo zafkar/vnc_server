@@ -27,6 +27,11 @@ uuid = { version = "1.23.4", features = ["serde", "v7"] }
 uzers = {version = "0.12.2", optional = true}
 xkeysym = "0.2.1"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Threading",
+], optional = true}
 
 [features]
 default = [
@@ -35,11 +40,13 @@ default = [
     "encoding_tight",
     "auth_provider_file",
     "auth_provider_pam",
+    "auth_provider_winlogon",
     "auth_method_mslogonii"
     ]
 encoding_zrle = ["dep:rfb-encodings"]
 encoding_tight = ["dep:rfb-encodings"]
 auth_provider_file = []
 auth_provider_pam = ["dep:uzers", "dep:pam-client"]
+auth_provider_winlogon = ["dep:windows"]
 auth_method_mslogonii = ["dep:num-prime"]
 management = []

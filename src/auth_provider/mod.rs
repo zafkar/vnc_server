@@ -9,6 +9,8 @@ pub mod file_auth;
 pub mod none_provider;
 #[cfg(feature = "auth_provider_pam")]
 pub mod pam;
+#[cfg(feature = "auth_provider_winlogon")]
+pub mod windows_logon;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct UserPermissions {

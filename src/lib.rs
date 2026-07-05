@@ -9,3 +9,6 @@ pub mod server;
 
 #[cfg(all(feature = "auth_provider_pam", not(target_os = "linux")))]
 compile_error!("The feature auth_provider_pam only works on linux");
+
+#[cfg(all(feature = "auth_provider_winlogon", not(target_os = "windows")))]
+compile_error!("The feature auth_provider_winlogon only works on linux")
