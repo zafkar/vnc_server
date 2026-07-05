@@ -28,7 +28,7 @@ use tokio::{
     task::JoinSet,
     time::Instant,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 #[cfg(feature = "management")]
 use crate::mgmt_server::client::{ClientInfo, ClientStatus};
@@ -177,9 +177,9 @@ impl ClientConnexion {
                     });
                 }
                 ClientMessage::FramebufferUpdateRequest { incremental, rect } => {
-                    debug!("Client asks for {rect:?}, incremental {incremental:?}");
+                    trace!("Client asks for {rect:?}, incremental {incremental:?}");
                     if !user_permissions.view {
-                        debug!("Client forbidden from view");
+                        trace!("Client forbidden from view");
                         continue;
                     }
                     encoding_joinset.spawn(send_framebuffer_update(
