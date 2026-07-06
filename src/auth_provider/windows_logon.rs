@@ -1,15 +1,13 @@
-use std::marker::PhantomData;
-
 use anyhow::{Result, anyhow};
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HANDLE},
         Security::{
             CheckTokenMembership, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, LogonUserW,
-            LookupAccountNameW,
+            LookupAccountNameW, PSID, SID_NAME_USE,
         },
     },
-    core::PCWSTR,
+    core::{PCWSTR, PWSTR},
 };
 
 use crate::{
@@ -21,19 +19,14 @@ fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-pub struct WinLogon<T>(T);
+pub struct WinLogon(Option<HANDLE>);
 
-impl WinLogon<()> {
+impl WinLogon {
     pub fn new() -> Self {
-        Self(())
+        Self(None)
     }
 
-    pub fn login(
-        self,
-        username: &str,
-        domain: Option<&str>,
-        password: &str,
-    ) -> Result<WinLogon<HANDLE>> {
+    pub fn login(&mut self, username: &str, domain: Option<&str>, password: &str) -> Result<bool> {
         let user = to_wide(username);
         let domain = to_wide(domain.unwrap_or("."));
         let pass = to_wide(password);
@@ -52,14 +45,30 @@ impl WinLogon<()> {
         };
 
         if ok.is_ok() {
-            Ok(WinLogon(token))
+            self.0 = Some(token);
+            Ok(true)
         } else {
             Err(anyhow!("Failed to connect"))
         }
     }
+
+    pub fn is_member(&self, system: Option<&str>, group: &str) -> Result<bool> {
+        let Some(token) = self.0 else {
+            return Err(anyhow!("User is not logged in"));
+        };
+        let sid = lookup_group_sid(system, group)?;
+
+        let mut member = false.into();
+
+        unsafe {
+            CheckTokenMembership(Some(token), sid, &mut member)?;
+        }
+
+        Ok(member.as_bool())
+    }
 }
 
-fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<Vec<u8>> {
+fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<PSID> {
     let system = system.map(to_wide);
     let group = to_wide(group);
 
@@ -79,22 +88,22 @@ fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<Vec<u8>> {
             PCWSTR(group.as_ptr()),
             None,
             &mut sid_size,
-            PWSTR::null(),
+            None,
             &mut domain_size,
             &mut sid_use,
         );
     }
 
-    let mut sid = vec![0u8; sid_size as usize];
+    let sid = PSID::default();
     let mut domain = vec![0u16; domain_size as usize];
 
     unsafe {
         LookupAccountNameW(
             system_ptr,
             PCWSTR(group.as_ptr()),
-            Some(sid.as_mut_ptr() as _),
+            Some(sid),
             &mut sid_size,
-            PWSTR(domain.as_mut_ptr()),
+            Some(PWSTR(domain.as_mut_ptr())),
             &mut domain_size,
             &mut sid_use,
         )?;
@@ -103,23 +112,13 @@ fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<Vec<u8>> {
     Ok(sid)
 }
 
-impl WinLogon<HANDLE> {
-    pub fn is_member(&self, system: Option<&str>, group: &str) -> Result<bool> {
-        let sid = lookup_group_sid(system, group)?;
-
-        let mut member = false.into();
-
-        unsafe {
-            CheckTokenMembership(self.0, sid.as_ptr() as _, &mut member)?;
-        }
-
-        Ok(member.as_bool())
-    }
-}
-
-impl Drop for WinLogon<HANDLE> {
+impl Drop for WinLogon {
     fn drop(&mut self) {
-        unsafe { CloseHandle(self.0) };
+        if let Some(token) = self.0 {
+            unsafe {
+                let _ = CloseHandle(token);
+            };
+        }
     }
 }
 
@@ -135,7 +134,7 @@ fn default_system() -> String {
     ".".to_string()
 }
 
-pub struct WinLogonAuthProvider(WinLogonAuthProviderConfig);
+pub struct WinLogonAuthProvider(pub WinLogonAuthProviderConfig);
 
 impl AuthProvider for WinLogonAuthProvider {
     fn get_passwords_permissions(
@@ -147,25 +146,25 @@ impl AuthProvider for WinLogonAuthProvider {
     }
 
     fn verify_user(&self, login: &str, password: &str) -> Result<SecurityResult> {
-        let winlogon = WinLogon::new();
+        let mut winlogon = WinLogon::new();
 
         let (domain, username) = if let Some((domain, username)) = login.split_once("\\") {
             (Some(domain), username)
         } else {
-            (None, username)
+            (None, login)
         };
 
-        let Ok(winlogon_logged) = winlogon.login(username, domain, password) else {
+        if !winlogon.login(username, domain, password)? {
             return Ok(SecurityResult::Denied("Wrong password or user".to_string()));
         };
 
         let mut permissions = UserPermissions::empty();
-        if winlogon_logged.is_member(self.0.target_system, self.0.view_group_name) {
-            permissions.set_view(true);
+        if winlogon.is_member(Some(&self.0.target_system), &self.0.view_group_name)? {
+            permissions = permissions.set_view(true);
         }
 
-        if winlogon_logged.is_member(self.0.target_system, self.0.control_group_name) {
-            permissions.set_control(true);
+        if winlogon.is_member(Some(&self.0.target_system), &self.0.control_group_name)? {
+            permissions = permissions.set_control(true);
         }
 
         Ok(SecurityResult::Authorized(permissions))

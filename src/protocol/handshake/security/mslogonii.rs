@@ -7,7 +7,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     task::spawn_blocking,
 };
-use tracing::warn;
+use tracing::{trace, warn};
 
 use crate::{auth_provider::AuthProvider, protocol::handshake::security::SecurityResult};
 
@@ -48,11 +48,10 @@ pub async fn check<S: AsyncWrite + AsyncRead + Unpin>(
 
     vnc_decrypt_bytes(&mut username_crypted, &key)?;
     let username = u8_null_to_string(&username_crypted)?;
-    dbg!(&username);
+    trace!("MSLOGONII : username: {}", username);
 
     vnc_decrypt_bytes(&mut password_crypted, &key)?;
     let password = u8_null_to_string(&password_crypted)?;
-    dbg!(&password);
 
     let handle = spawn_blocking(move || provider.verify_user(&username, &password));
 

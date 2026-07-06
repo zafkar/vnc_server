@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Result;
 
 #[cfg(feature = "auth_provider_winlogon")]
-use crate::auth_provider::windows_logon::WinLogonAuthProvider;
+use crate::auth_provider::windows_logon::{WinLogonAuthProvider, WinLogonAuthProviderConfig};
 use crate::{
     auth_provider::{AuthProvider, none_provider::NoneAuthProvider},
     protocol::{handshake::security::SecurityType, pixel_format::PixelFormat},
@@ -66,7 +66,7 @@ impl AuthProviderConfig {
             )),
             #[cfg(feature = "auth_provider_winlogon")]
             AuthProviderConfig::WinLogon(winlogon_auth_config) => {
-                Ok(Arc::new(WinLogonAuthProvider(winlogon_auth_config)))
+                Ok(Arc::new(WinLogonAuthProvider(winlogon_auth_config.clone())))
             }
         }
     }
