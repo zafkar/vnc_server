@@ -1,10 +1,11 @@
 use anyhow::{Result, anyhow};
+use tracing::debug;
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HANDLE},
         Security::{
             CheckTokenMembership, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, LogonUserW,
-            LookupAccountNameW, PSID, SID_NAME_USE,
+            LookupAccountNameW, PSID, SID_NAME_USE, SecurityImpersonation,
         },
     },
     core::{PCWSTR, PWSTR},
@@ -43,11 +44,23 @@ impl WinLogon {
                 &mut token,
             )
         };
+        debug!("Token: {:?}", token);
 
-        if ok.is_ok() {
+        if ok.is_ok() && token != HANDLE::default() {
+            debug!(
+                "Logged as user {}\\{} with token {:?}",
+                String::from_utf16_lossy(&domain),
+                username,
+                token
+            );
             self.0 = Some(token);
             Ok(true)
         } else {
+            debug!(
+                "Failed to log as user {}\\{}",
+                String::from_utf16_lossy(&domain),
+                username
+            );
             Err(anyhow!("Failed to connect"))
         }
     }
@@ -57,15 +70,30 @@ impl WinLogon {
             return Err(anyhow!("User is not logged in"));
         };
         let sid = lookup_group_sid(system, group)?;
-
+        debug!("SID for group {}: {:?}", group, sid);
         let mut member = false.into();
 
+        let duplicated_token = duplicate_token(token)?;
         unsafe {
-            CheckTokenMembership(Some(token), sid, &mut member)?;
+            CheckTokenMembership(Some(duplicated_token), sid, &mut member)?;
         }
+
+        debug!("User is member of group {}: {}", group, member.as_bool());
 
         Ok(member.as_bool())
     }
+}
+
+fn duplicate_token(token: HANDLE) -> Result<HANDLE> {
+    let mut duplicated_token = Default::default();
+    unsafe {
+        windows::Win32::Security::DuplicateToken(
+            token,
+            SecurityImpersonation,
+            &mut duplicated_token,
+        )?;
+    }
+    Ok(duplicated_token)
 }
 
 fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<PSID> {
@@ -94,7 +122,8 @@ fn lookup_group_sid(system: Option<&str>, group: &str) -> Result<PSID> {
         );
     }
 
-    let sid = PSID::default();
+    let mut sid_buffer = vec![0u16; sid_size as usize];
+    let sid = PSID(sid_buffer.as_mut_ptr() as *mut _);
     let mut domain = vec![0u16; domain_size as usize];
 
     unsafe {
