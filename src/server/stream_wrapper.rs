@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use anyhow::anyhow;
+use anyhow::{Result, anyhow};
 use bytes::{BufMut, Bytes, BytesMut};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -10,7 +10,7 @@ use tokio::{
     },
     select, spawn, sync,
 };
-use tokio_rustls::server;
+use tokio_rustls::{TlsAcceptor, server};
 
 pub enum TcpStreamWrapper {
     Raw(TcpStream),
@@ -18,6 +18,15 @@ pub enum TcpStreamWrapper {
 }
 
 impl TcpStreamWrapper {
+    pub async fn start_tls(self, acceptor: TlsAcceptor) -> Result<TcpStreamWrapper> {
+        match self {
+            TcpStreamWrapper::Raw(tcp_stream) => Ok(TcpStreamWrapper::TlsServer(
+                acceptor.accept(tcp_stream).await?,
+            )),
+            TcpStreamWrapper::TlsServer(tls_stream) => Ok(TcpStreamWrapper::TlsServer(tls_stream)),
+        }
+    }
+
     pub fn into_split(self) -> (TcpStreamWrapperReadHalf, TcpStreamWrapperWriteHalf) {
         match self {
             TcpStreamWrapper::Raw(tcp_stream) => {
@@ -242,5 +251,84 @@ impl AsyncWrite for TcpStreamWrapperWriteHalf {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use rcgen::generate_simple_self_signed;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+        spawn,
+    };
+    use tokio_rustls::{
+        TlsAcceptor, TlsConnector,
+        rustls::{
+            self, RootCertStore,
+            pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
+        },
+    };
+
+    use crate::server::stream_wrapper::TcpStreamWrapper;
+
+    fn test_cert() -> (CertificateDer<'static>, PrivateKeyDer<'static>) {
+        let cert = generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+
+        let cert_der = cert.cert.der().clone();
+
+        let key_der = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der()));
+
+        (cert_der, key_der)
+    }
+
+    #[tokio::test]
+    async fn split_tls_test() {
+        let (cert, key_der) = test_cert();
+        let tls_server_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert.clone()], key_der)
+            .unwrap();
+
+        let acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+
+        let addr = listener.local_addr().unwrap();
+
+        spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut wrapper = TcpStreamWrapper::Raw(stream);
+            wrapper = wrapper.start_tls(acceptor).await.unwrap();
+
+            let (mut read, mut write) = wrapper.into_split();
+            write.write_u16(0xDEAD).await.unwrap();
+
+            assert_eq!(read.read_u16().await.unwrap(), 0xBEEF)
+        });
+
+        let mut client_roots = RootCertStore::empty();
+        client_roots.add(cert).unwrap();
+
+        let tls_client_config = rustls::ClientConfig::builder()
+            .with_root_certificates(client_roots)
+            .with_no_client_auth();
+
+        let connector = TlsConnector::from(Arc::new(tls_client_config));
+
+        let stream = TcpStream::connect(addr).await.unwrap();
+
+        let mut tls_client_stream = connector
+            .connect(
+                rustls::pki_types::ServerName::try_from("localhost").unwrap(),
+                stream,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(tls_client_stream.read_u16().await.unwrap(), 0xDEAD);
+        tls_client_stream.write_u16(0xBEEF).await.unwrap();
     }
 }
