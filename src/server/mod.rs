@@ -5,7 +5,7 @@ use crate::{
     capture::Capturer,
     config::Config,
     input_controller::{Controller, ControllerChannels},
-    server::client_connexion::ClientConnexion,
+    server::{client_connexion::ClientConnexion, stream_wrapper::TcpStreamWrapper},
 };
 use anyhow::Result;
 use tokio::{net::TcpListener, spawn, task::spawn_blocking};
@@ -20,6 +20,7 @@ use crate::mgmt_server::{
 use tokio::sync;
 
 mod client_connexion;
+pub mod stream_wrapper;
 
 #[derive(Debug)]
 pub struct VNCServer {
@@ -103,7 +104,7 @@ impl VNCServer {
             };
             #[allow(unused)]
             let handle = spawn(async move {
-                match client_connexion.start(stream).await {
+                match client_connexion.start(TcpStreamWrapper::Raw(stream)).await {
                     Ok(_) => info!("Client {addr:?} disconnected"),
                     Err(err) => warn!("Client thread for {addr:?} failed : {err}"),
                 }

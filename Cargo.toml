@@ -32,6 +32,7 @@ windows = { version = "0.62", features = [
     "Win32_Security",
     "Win32_System_Threading",
 ], optional = true}
+tokio-rustls = "0.26.4"
 
 [features]
 default = [

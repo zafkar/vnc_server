@@ -18,11 +18,11 @@ use crate::{
         pseudo_encodings::cursor_alpha::AlphaCursorPseudoEncodings,
         server_msg::ServerMessage,
     },
+    server::stream_wrapper::TcpStreamWrapper,
 };
 use anyhow::{Result, anyhow};
 use tokio::{
     io::{AsyncWriteExt, BufWriter},
-    net::TcpStream,
     select, spawn,
     sync::{self, Mutex},
     task::JoinSet,
@@ -48,7 +48,7 @@ pub(super) struct ClientConnexion {
 }
 
 impl ClientConnexion {
-    pub async fn start(&mut self, mut stream: TcpStream) -> Result<()> {
+    pub async fn start(&mut self, mut stream: TcpStreamWrapper) -> Result<()> {
         Version::default().send(&mut stream).await?;
         let requested_version = Version::recv(&mut stream).await?;
         debug!("Requested version is {requested_version:?}");
